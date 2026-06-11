@@ -1,0 +1,22 @@
+{
+  "name": "game",
+  "version": "0.1.0",
+  "description": "穿梭副本、自由配裝的純文字 Roguelite（第一紀元）",
+  "type": "module",
+  "scripts": {
+    "game": "tsx src/cli.ts",
+    "sim": "tsx src/sim.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.26.1",
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
