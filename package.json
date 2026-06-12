@@ -4,19 +4,25 @@
   "description": "穿梭副本、自由配裝的純文字 Roguelite（第一紀元）",
   "type": "module",
   "scripts": {
-    "game": "tsx src/cli.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "sim": "tsx src/sim.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.26.1",
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@types/node": "^25.9.3",
+    "svelte": "^5.56.3",
+    "svelte-check": "^4.6.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
+    "vite": "^8.0.16",
     "vitest": "^4.1.8"
   }
 }
