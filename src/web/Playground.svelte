@@ -9,7 +9,7 @@
     rollOutcome,
     type AttackOutcome,
   } from '../core/attackTable.js';
-  import { attackInterval, balanceRoll, effectiveBalance } from '../core/formulas.js';
+  import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from '../core/formulas.js';
   import { createRng } from '../core/rng.js';
   import { ATTR_NAMES, type AttrKey, type Attributes } from '../core/types.js';
   import { attrRank, attrTotalSpent } from '../game/economy.js';
@@ -187,7 +187,9 @@
           <span class="rank-badge rank-{attrRank(attacker[key])}">{attrRank(attacker[key])}</span>
         </label>
       {/each}
-      <div class="muted">已投入點數：{sideTotalSpent(attacker).toLocaleString()}</div>
+      <div class="muted">
+        生命 {maxHp(attacker.vit)}｜精神 {maxMp(attacker.wil)}｜已投入點數：{sideTotalSpent(attacker).toLocaleString()}
+      </div>
       <div class="pg-flags">
         <label><input type="checkbox" bind:checked={canCrit} /> 可暴擊（槍＝否）</label>
         <label><input type="checkbox" bind:checked={canBeParried} /> 可被招架（射擊、法術＝否）</label>
@@ -213,7 +215,9 @@
           <span class="rank-badge rank-{attrRank(defender[key])}">{attrRank(defender[key])}</span>
         </label>
       {/each}
-      <div class="muted">已投入點數：{sideTotalSpent(defender).toLocaleString()}</div>
+      <div class="muted">
+        生命 {maxHp(defender.vit)}｜精神 {maxMp(defender.wil)}｜已投入點數：{sideTotalSpent(defender).toLocaleString()}
+      </div>
       <label class="pg-attr pg-equip">
         <span>招架率%</span>
         <input type="range" min="0" max="25" bind:value={parryRate} />
@@ -252,11 +256,11 @@
         <tr><td>11〜50（D）</td><td>100</td><td>4,000</td><td>4,000</td></tr>
         <tr><td>51〜100（C）</td><td>300</td><td>15,000</td><td>19,000</td></tr>
         <tr><td>101〜150（B）</td><td>1,000</td><td>50,000</td><td>69,000</td></tr>
-        <tr><td>151〜200（A）</td><td>2,000</td><td>100,000</td><td>169,000</td></tr>
-        <tr><td>201〜255（S）</td><td>5,000</td><td>275,000</td><td><strong>444,000</strong></td></tr>
+        <tr><td>151〜200（A）</td><td>3,000</td><td>150,000</td><td>219,000</td></tr>
+        <tr><td>201〜255（S）</td><td>10,000</td><td>550,000</td><td><strong>769,000</strong></td></tr>
       </tbody>
     </table>
-    <div class="muted">單屬性點滿 444,000；六邊形全滿 2,664,000。</div>
+    <div class="muted">單屬性點滿 769,000；六邊形全滿 4,614,000。生命＝體質×10、精神＝意志×5。</div>
   </div>
   <div class="pg-histo">
     <h3>傷害分布（中心＝平衡位置）</h3>
@@ -349,6 +353,7 @@
         <span class="legend-item">最低：{damageStats.min}</span>
         <span class="legend-item">最高：{damageStats.max}</span>
         <span class="legend-item">每秒傷害：{damageStats.dps.toFixed(1)}</span>
+        <span class="legend-item">擊殺守方需時：{(maxHp(defender.vit) / damageStats.dps).toFixed(1)}s</span>
       </div>
     {/if}
   </div>

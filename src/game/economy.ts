@@ -6,15 +6,15 @@ export function attrPrice(key: AttrKey, current: number): number {
   return (current - BASE_ATTRS[key] + 1) * 10;
 }
 
-// ─ 屬性升級花費（已定案 2026-06-12）─
+// ─ 屬性升級花費（已定案 2026-06-12；A/S 級調漲）─
 // 起始 10、上限 255；費用依「目標值」所在區間計價，區間即屬性的階級標記。
-// 單屬性點滿 444,000；六邊形全滿 2,664,000。
+// 單屬性點滿 769,000；六邊形全滿 4,614,000。
 const ATTR_BRACKETS: { max: number; cost: number; rank: Rank }[] = [
   { max: 50, cost: 100, rank: 'D' },
   { max: 100, cost: 300, rank: 'C' },
   { max: 150, cost: 1000, rank: 'B' },
-  { max: 200, cost: 2000, rank: 'A' },
-  { max: 255, cost: 5000, rank: 'S' },
+  { max: 200, cost: 3000, rank: 'A' },
+  { max: 255, cost: 10000, rank: 'S' },
 ];
 
 export const ATTR_START = 10;

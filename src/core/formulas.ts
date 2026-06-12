@@ -1,3 +1,13 @@
+// ─ 生命與精神（已定案 2026-06-12）─
+// 沒有基礎值：全部由屬性提供（起始 10 → 生命 100、精神 50）。
+export function maxHp(vit: number): number {
+  return vit * 10;
+}
+
+export function maxMp(wil: number): number {
+  return wil * 5;
+}
+
 /**
  * 攻速（已定案 2026-06-12）：百分比＋飽和曲線，跟躲避同一套語言。
  * 出手間隔 ＝ 武器基礎間隔 ÷（1 ＋ 加速）
