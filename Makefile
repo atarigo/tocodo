@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install game build sim test typecheck check
+.PHONY: help install dev game build sim test typecheck check
 
 help: ## 顯示所有可用指令
 	@echo ""
@@ -11,8 +11,10 @@ help: ## 顯示所有可用指令
 install: ## 安裝依賴套件
 	pnpm install
 
-game: ## 啟動網頁版（瀏覽器開 http://localhost:5173）
+dev: ## 啟動網頁開發伺服器（http://localhost:5173）
 	pnpm dev
+
+game: dev ## 同 dev：啟動網頁版
 
 build: ## 正式建置（輸出到 dist/）
 	pnpm build
