@@ -242,6 +242,10 @@ function takeTurn(battle: Battle, f: FighterState, foe: FighterState, t: number)
   if (f.casting) {
     const skill = f.casting.skill;
     f.casting = null;
+    // 出手才扣資源：詠唱被打斷不扣精神、不進冷卻；
+    // 但施放出去就算數——落空、被閃避照樣扣精神、進冷卻
+    f.mp -= skill.mpCost * (f.unit.weapon.mpCostMult ?? 1);
+    f.cooldowns.set(skill.id, t + skill.cooldown);
     resolveOffense(battle, f, foe, skillSpec(skill), t);
     f.nextActionAt = t + currentInterval(f);
     return;
@@ -259,13 +263,14 @@ function takeTurn(battle: Battle, f: FighterState, foe: FighterState, t: number)
   });
 
   if (usable) {
-    f.mp -= usable.mpCost * (weapon.mpCostMult ?? 1);
-    f.cooldowns.set(usable.id, t + usable.cooldown);
     const castTime = usable.castTime * (weapon.castTimeMult ?? 1);
     if (castTime > 0) {
+      // 詠唱開始不扣資源，出手（詠唱完成）才結算
       f.casting = { skill: usable, finishAt: t + castTime };
       push(t, 'cast', f.side, `${f.unit.name} 開始詠唱【${usable.name}】（${castTime.toFixed(1)} 秒）`);
     } else {
+      f.mp -= usable.mpCost * (weapon.mpCostMult ?? 1);
+      f.cooldowns.set(usable.id, t + usable.cooldown);
       resolveOffense(battle, f, foe, skillSpec(usable), t);
       f.nextActionAt = t + currentInterval(f);
     }
