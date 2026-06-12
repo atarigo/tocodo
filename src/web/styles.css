@@ -169,6 +169,30 @@ body {
   color: var(--muted);
 }
 
+.pg-flags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.pg-flags label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pg-inline-num {
+  width: 64px;
+  background: #15161c;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
 .pg-table h3,
 .pg-sample h3 {
   margin: 0 0 10px;

@@ -16,18 +16,19 @@ import type { Rng } from './rng.js';
  * 全部歸零時 = 100% 普通命中。
  *
  * 進度：
- *   已定案：閃避（敏捷 vs 靈巧差距）、躲避（守方幸運）、暴擊（攻方幸運）
- *   待定案：招架（無盾也有）、格檔（有盾才有，減傷較高）、
- *           要害、碾壓（來源待定義）
+ *   已定案：閃避（敏捷，可被靈巧壓制一半）、躲避（守方幸運）、暴擊（攻方幸運）、
+ *           招架（武器提供 5〜25%，減傷 30%，擋不住效果）、
+ *           格檔（盾牌提供 30〜45%，減傷 60%，可擋單體鎖定效果——待 buff/debuff）
+ *   待定案：碾壓（提案：頭目自帶攻擊段 15〜25%、傷害 ×2，排隊列最末，
+ *           防禦堆高時在普通命中歸零後第一個被擠出——坦克玩法的本體）
+ *   已移除：要害、落空（基礎落空）
  */
 export type AttackOutcome =
-  | '落空'
   | '閃避'
   | '躲避'
   | '招架'
   | '格檔'
   | '暴擊'
-  | '要害'
   | '碾壓'
   | '命中';
 
@@ -40,9 +41,30 @@ export interface TableSegment {
 export interface AttackTableContext {
   attacker: Attributes;
   defender: Attributes;
-  /** 有盾才有格檔段（第 3 步起使用） */
-  defenderHasShield: boolean;
+  /** 招架率：一般武器提供（約 5%〜25%），屬性不提供；可被法術 buff/debuff 增減 */
+  defenderParryRate: number;
+  /** 格檔率：只有盾牌提供（約 30%〜45%），0 ＝ 沒有盾；可被法術 buff/debuff 增減 */
+  defenderBlockRate: number;
+  /** 攻方可否暴擊（槍不可——槍手的幸運只剩躲避） */
+  attackerCanCrit?: boolean;
+  /** 碾壓率：頭目普攻限定，預設 15%、各頭目可自訂；技能與一般敵人為 0 */
+  attackerCrushRate?: number;
+  /** 此次攻擊可否被招架（近戰可；射擊、法術撥不開）——由攻擊宣告 */
+  canBeParried?: boolean;
+  /** 此次攻擊可否被格檔（盾牌連火球都擋得住）——由攻擊宣告 */
+  canBeBlocked?: boolean;
 }
+
+/** 頭目碾壓的統一預設值（各頭目可自行覆寫） */
+export const BOSS_CRUSH_RATE = 0.15;
+export const CRUSH_MULTIPLIER = 2;
+
+// ─ 招架與格檔（已定案 2026-06-12）─
+// 率與減傷都來自技能或裝備，屬性不提供。
+/** 招架：減免傷害 30%，無法阻止效果發動 */
+export const PARRY_DAMAGE_REDUCTION = 0.3;
+/** 格檔：固定減免傷害 60%；可阻止「單體鎖定」效果（範圍效果擋不住）——該機制待 buff/debuff 系統再實作 */
+export const BLOCK_DAMAGE_REDUCTION = 0.6;
 
 // ─ 躲避（已定案 2026-06-12）─
 // 躲避 ＝ 上限 × 幸運 ÷ (幸運 ＋ K)：飽和曲線，前段便宜、後段昂貴。
@@ -72,8 +94,8 @@ export function dodgeWidth(defenderAgi: number, attackerDex: number): number {
 // ─ 暴擊（已定案 2026-06-12）─
 // 線性成長：暴擊在 bar 尾端、會被守方防禦段擠壓，有天然反制，
 // 不像躲避需要曲線自我節制。幸運 255 → 30%。
+// 要害已從設計中移除（2026-06-12）；倍率單純 ×1.5，不再複雜化。
 const CRIT_CAP = 0.3;
-/** 暴擊倍率（暫定） */
 export const CRIT_MULTIPLIER = 1.5;
 
 export function critWidth(luk: number): number {
@@ -91,10 +113,22 @@ export function buildAttackTable(ctx: AttackTableContext): TableSegment[] {
       outcome: '躲避',
       width: evadeWidth(ctx.defender.luk),
     },
-    // 攻方特殊結果：防禦段堆高時最先被擠出表外的一端
+    {
+      outcome: '招架',
+      width: (ctx.canBeParried ?? true) ? Math.max(0, ctx.defenderParryRate) : 0,
+    },
+    {
+      outcome: '格檔',
+      width: (ctx.canBeBlocked ?? true) ? Math.max(0, ctx.defenderBlockRate) : 0,
+    },
+    // 攻方特殊結果：防禦段堆高時，普通命中先歸零 → 碾壓被擠出 → 最後才是暴擊
     {
       outcome: '暴擊',
-      width: critWidth(ctx.attacker.luk),
+      width: (ctx.attackerCanCrit ?? true) ? critWidth(ctx.attacker.luk) : 0,
+    },
+    {
+      outcome: '碾壓',
+      width: Math.max(0, ctx.attackerCrushRate ?? 0),
     },
   ];
 
@@ -116,4 +150,32 @@ export function rollOutcome(table: TableSegment[], rng: Rng): AttackOutcome {
     if (roll < 0) return segment.outcome;
   }
   return table[table.length - 1]?.outcome ?? '命中';
+}
+
+// ─ 第二階段：傷害計算（已定案 2026-06-12）─
+// 第一階段骰表產出標籤，第二階段依標籤算傷害：
+//   增傷（暴擊 ×1.5／碾壓 ×2）→ 減算（防具總和）→ 減成（防禦倍率）→ 招架/格檔折減
+// 真傷不走這裡：第一階段有過就打技能宣告的固定值，不計增傷、不計任何防禦與折減。
+
+export interface DefenseValues {
+  /** 防具總和（減算） */
+  flat: number;
+  /** 防禦倍率（減成）：1 ＝ 無減免，0.7 ＝ 只受 70% 傷害；buff/debuff/裝備效果都乘在這 */
+  multiplier: number;
+}
+
+export function resolveDamage(
+  outcome: AttackOutcome,
+  base: number,
+  defense: DefenseValues,
+): number {
+  if (outcome === '閃避' || outcome === '躲避') return 0;
+  let damage = base;
+  if (outcome === '暴擊') damage *= CRIT_MULTIPLIER;
+  if (outcome === '碾壓') damage *= CRUSH_MULTIPLIER;
+  damage = (damage - defense.flat) * defense.multiplier;
+  if (outcome === '招架') damage *= 1 - PARRY_DAMAGE_REDUCTION;
+  if (outcome === '格檔') damage *= 1 - BLOCK_DAMAGE_REDUCTION;
+  // 最低 1（暫定）：防禦是減傷不是抵銷
+  return Math.max(1, Math.round(damage));
 }

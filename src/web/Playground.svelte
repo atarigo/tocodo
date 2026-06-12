@@ -1,6 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { buildAttackTable, CRIT_MULTIPLIER, rollOutcome, type AttackOutcome } from '../core/attackTable.js';
+  import {
+    BLOCK_DAMAGE_REDUCTION,
+    buildAttackTable,
+    CRIT_MULTIPLIER,
+    PARRY_DAMAGE_REDUCTION,
+    resolveDamage,
+    rollOutcome,
+    type AttackOutcome,
+  } from '../core/attackTable.js';
   import { attackInterval, balanceRoll, effectiveBalance } from '../core/formulas.js';
   import { createRng } from '../core/rng.js';
   import { ATTR_NAMES, type AttrKey, type Attributes } from '../core/types.js';
@@ -17,18 +25,40 @@
 
   // 進場先跑一次，畫面就有初始值
   onMount(() => runSample());
-  let defenderHasShield = $state(false);
+  // 率來自裝備（屬性不提供）：招架＝武器（5〜25%）、格檔＝盾牌（30〜45%，0＝沒有盾）
+  let parryRate = $state(15);
+  let blockRate = $state(0);
+  // 攻擊宣告：每次攻擊宣告自己適用哪些段（法術不可被招架、槍不可暴擊、頭目普攻帶碾壓…）
+  let canCrit = $state(true);
+  let crushRate = $state(0);
+  let canBeParried = $state(true);
+  let canBeBlocked = $state(true);
+  // 真傷：第一階段有過就打固定值，不計增傷、防禦、折減
+  let trueDamageMode = $state(false);
+  let trueDamageValue = $state(15);
+  // 守方防禦數值：減算（防具總和）與減成（防禦倍率）
+  let defenseFlat = $state(0);
+  let defenseReduction = $state(0);
 
-  const table = $derived(buildAttackTable({ attacker, defender, defenderHasShield }));
+  const table = $derived(
+    buildAttackTable({
+      attacker,
+      defender,
+      defenderParryRate: parryRate / 100,
+      defenderBlockRate: blockRate / 100,
+      attackerCanCrit: canCrit,
+      attackerCrushRate: crushRate / 100,
+      canBeParried,
+      canBeBlocked,
+    }),
+  );
 
   const COLORS: Record<AttackOutcome, string> = {
-    落空: '#5a5f70',
     閃避: '#3fa7a0',
     躲避: '#f0c75e',
     招架: '#5b8def',
     格檔: '#7d6ee0',
     暴擊: '#e0954b',
-    要害: '#e0564b',
     碾壓: '#b04bd9',
     命中: '#6fbf73',
   };
@@ -62,8 +92,8 @@
   let histogram = $state<number[] | null>(null);
   const HISTO_BINS = 24;
 
-  /** 這些結果會造成傷害（之後招架、格檔入場時要把減傷算進去） */
-  const DAMAGING: Set<AttackOutcome> = new Set(['命中', '招架', '格檔', '暴擊', '要害', '碾壓']);
+  /** 這些結果會造成傷害（含打折後的） */
+  const DAMAGING: Set<AttackOutcome> = new Set(['命中', '招架', '格檔', '暴擊', '碾壓']);
 
   function runSample(): void {
     const rng = createRng(Date.now() >>> 0);
@@ -75,8 +105,18 @@
       const outcome = rollOutcome(table, rng);
       counts.set(outcome, (counts.get(outcome) ?? 0) + 1);
       if (DAMAGING.has(outcome)) {
-        const raw = balanceRoll(rng, lo, hi, balance) + attacker.str;
-        damages.push(Math.round(outcome === '暴擊' ? raw * CRIT_MULTIPLIER : raw));
+        if (trueDamageMode) {
+          // 真傷：骰到什麼都算命中，固定值
+          damages.push(trueDamageValue);
+        } else {
+          const base = balanceRoll(rng, lo, hi, balance) + attacker.str;
+          damages.push(
+            resolveDamage(outcome, base, {
+              flat: defenseFlat,
+              multiplier: 1 - defenseReduction / 100,
+            }),
+          );
+        }
       }
     }
     sampleCounts = [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -126,7 +166,13 @@
       <br />🧪 平衡（試行）＝武器平衡 ×（1＋放大率），上限 80%；
       放大率＝ 60% × 靈巧 ÷（靈巧＋128），低靈巧每點更有效（64 → +20%、128 → +30%、255 → 約 +40%）。
       傷害以「最小傷＋範圍×平衡」為中心呈鐘形分佈（標準差＝範圍×0.2，暫定）。
-      <br />⏳ 待定：招架、格檔、要害、碾壓、暴擊倍率。
+      <br />✅ 招架＝武器提供 5〜25%（屬性不提供），減傷 30%，無法阻止效果發動。
+      <br />✅ 格檔＝盾牌提供 30〜45%（0＝無盾），固定減傷 60%；可擋單體鎖定效果（範圍擋不住）——待 buff/debuff 系統。
+      <br />✅ 暴擊倍率定案 ×1.5；要害已移除；槍不可暴擊（槍手的幸運只剩躲避）。
+      <br />✅ 碾壓＝頭目普攻限定，統一預設 15%（各頭目可自訂）、傷害 ×2；防禦堆高時在命中歸零後第一個被擠出。
+      <br />✅ 兩階段：骰表出標籤 → 增傷（暴擊/碾壓）→ 減算（防具總和）→ 減成（防禦倍率）→ 招架/格檔折減。
+      <br />✅ 真傷＝骰到什麼都算命中，打固定值，不計增傷、防禦與折減。
+      <br />⏳ 待定：鐘形寬度、各段適用預設表（近戰技/射擊/法術）正式確認。
     </p>
   </div>
 
@@ -142,6 +188,20 @@
         </label>
       {/each}
       <div class="muted">已投入點數：{sideTotalSpent(attacker).toLocaleString()}</div>
+      <div class="pg-flags">
+        <label><input type="checkbox" bind:checked={canCrit} /> 可暴擊（槍＝否）</label>
+        <label><input type="checkbox" bind:checked={canBeParried} /> 可被招架（射擊、法術＝否）</label>
+        <label><input type="checkbox" bind:checked={canBeBlocked} /> 可被格檔</label>
+        <label class="pg-attr">
+          <span>碾壓率%</span>
+          <input type="range" min="0" max="25" bind:value={crushRate} />
+          <input type="number" min="0" max="100" bind:value={crushRate} />
+          <span class="muted">頭目普攻限定，預設 15、×2</span>
+        </label>
+        <label><input type="checkbox" bind:checked={trueDamageMode} /> 真傷（固定值
+          <input class="pg-inline-num" type="number" min="1" max="9999" bind:value={trueDamageValue} />
+          ，骰到什麼都算命中，不計增傷與防禦）</label>
+      </div>
     </div>
     <div class="pg-side">
       <h3>守方</h3>
@@ -154,9 +214,29 @@
         </label>
       {/each}
       <div class="muted">已投入點數：{sideTotalSpent(defender).toLocaleString()}</div>
-      <label class="pg-shield">
-        <input type="checkbox" bind:checked={defenderHasShield} />
-        裝備盾牌（第 3 步起會長出格檔段）
+      <label class="pg-attr pg-equip">
+        <span>招架率%</span>
+        <input type="range" min="0" max="25" bind:value={parryRate} />
+        <input type="number" min="0" max="100" bind:value={parryRate} />
+        <span class="muted">武器提供，減傷 {PARRY_DAMAGE_REDUCTION * 100}%</span>
+      </label>
+      <label class="pg-attr pg-equip">
+        <span>格檔率%</span>
+        <input type="range" min="0" max="45" bind:value={blockRate} />
+        <input type="number" min="0" max="100" bind:value={blockRate} />
+        <span class="muted">盾牌提供（0＝無盾），減傷 {BLOCK_DAMAGE_REDUCTION * 100}%</span>
+      </label>
+      <label class="pg-attr pg-equip">
+        <span>防具總和</span>
+        <input type="range" min="0" max="200" bind:value={defenseFlat} />
+        <input type="number" min="0" max="9999" bind:value={defenseFlat} />
+        <span class="muted">減算（−）</span>
+      </label>
+      <label class="pg-attr pg-equip">
+        <span>減成%</span>
+        <input type="range" min="0" max="80" bind:value={defenseReduction} />
+        <input type="number" min="0" max="100" bind:value={defenseReduction} />
+        <span class="muted">防禦倍率（buff/debuff/裝備效果）</span>
       </label>
     </div>
   </div>
