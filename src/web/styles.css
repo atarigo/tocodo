@@ -82,6 +82,156 @@ body {
   overflow: hidden;
 }
 
+.layout-single {
+  flex: 1;
+  display: grid;
+  padding: 10px;
+  min-height: 0;
+}
+
+.view-switch {
+  display: flex;
+  gap: 4px;
+}
+
+.view-switch button {
+  font-size: 12px;
+  padding: 3px 12px;
+}
+
+.view-switch button.active {
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+}
+
+/* ─ 實驗室 ─ */
+.playground {
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.pg-header h2 {
+  margin: 0 0 6px;
+  color: var(--accent-2);
+}
+
+.step-note {
+  background: #232633;
+  border-left: 3px solid var(--accent-2);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.pg-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.pg-side h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--accent-2);
+}
+
+.pg-attr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.pg-attr span {
+  min-width: 36px;
+}
+
+.pg-attr input[type='range'] {
+  flex: 1;
+}
+
+.pg-attr input[type='number'] {
+  width: 64px;
+  background: #15161c;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+
+.pg-shield {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--muted);
+}
+
+.pg-table h3,
+.pg-sample h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--accent-2);
+}
+
+.bar {
+  display: flex;
+  height: 44px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+}
+
+.bar-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #101117;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.sample-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.sample-controls input {
+  width: 110px;
+  background: #15161c;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
 /* ─ 左欄 ─ */
 .section {
   margin-bottom: 18px;
