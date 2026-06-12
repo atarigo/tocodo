@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { buildAttackTable, CRIT_MULTIPLIER, rollOutcome, type AttackOutcome } from '../core/attackTable.js';
-  import { attackInterval } from '../core/formulas.js';
+  import { attackInterval, balanceRoll, effectiveBalance } from '../core/formulas.js';
   import { createRng } from '../core/rng.js';
   import { ATTR_NAMES, type AttrKey, type Attributes } from '../core/types.js';
   import { attrRank, attrTotalSpent } from '../game/economy.js';
@@ -13,6 +14,9 @@
   function sideTotalSpent(attrs: Attributes): number {
     return ATTR_KEYS.reduce((sum, key) => sum + attrTotalSpent(attrs[key]), 0);
   }
+
+  // 進場先跑一次，畫面就有初始值
+  onMount(() => runSample());
   let defenderHasShield = $state(false);
 
   const table = $derived(buildAttackTable({ attacker, defender, defenderHasShield }));
@@ -32,15 +36,17 @@
   let sampleCounts = $state<[AttackOutcome, number][] | null>(null);
   let sampleSize = $state(10000);
 
-  // 武器大小傷（攻方）；傷害＝區間擲骰＋力量固定值。
-  // 平衡（靈巧影響落點）公式未定案，暫用均勻擲骰。
+  // 武器大小傷（攻方）；傷害＝平衡擲骰＋力量固定值。
   let weaponMin = $state(10);
   let weaponMax = $state(30);
+  // 武器自帶平衡（%）；靈巧加強、上限 80%
+  let weaponBalance = $state(40);
   // 武器基礎出手間隔（秒）；攻速＝間隔 ÷（1＋ 60%×敏捷÷(敏捷+128)），槍類不吃敏捷
   let weaponInterval = $state(1.8);
   let agiApplies = $state(true);
 
   const effectiveInterval = $derived(attackInterval(weaponInterval, attacker.agi, agiApplies));
+  const balance = $derived(effectiveBalance(weaponBalance / 100, attacker.dex));
 
   interface DamageStats {
     hits: number;
@@ -52,6 +58,9 @@
     dps: number;
   }
   let damageStats = $state<DamageStats | null>(null);
+  /** 傷害分布直方圖（正規化高度 0〜1） */
+  let histogram = $state<number[] | null>(null);
+  const HISTO_BINS = 24;
 
   /** 這些結果會造成傷害（之後招架、格檔入場時要把減傷算進去） */
   const DAMAGING: Set<AttackOutcome> = new Set(['命中', '招架', '格檔', '暴擊', '要害', '碾壓']);
@@ -66,7 +75,7 @@
       const outcome = rollOutcome(table, rng);
       counts.set(outcome, (counts.get(outcome) ?? 0) + 1);
       if (DAMAGING.has(outcome)) {
-        const raw = lo + (hi - lo) * rng() + attacker.str;
+        const raw = balanceRoll(rng, lo, hi, balance) + attacker.str;
         damages.push(Math.round(outcome === '暴擊' ? raw * CRIT_MULTIPLIER : raw));
       }
     }
@@ -86,8 +95,17 @@
         // 每次出手（不論結果）都消耗一個出手間隔
         dps: total / (sampleSize * effectiveInterval),
       };
+      const span = damages[damages.length - 1] - damages[0];
+      const counts = new Array<number>(HISTO_BINS).fill(0);
+      for (const d of damages) {
+        const bin = span === 0 ? 0 : Math.min(HISTO_BINS - 1, Math.floor(((d - damages[0]) / span) * HISTO_BINS));
+        counts[bin]++;
+      }
+      const peak = Math.max(...counts);
+      histogram = counts.map((c) => c / peak);
     } else {
       damageStats = null;
+      histogram = null;
     }
   }
 </script>
@@ -105,7 +123,10 @@
       <br />✅ 暴擊＝ 30% × 攻方幸運 ÷ 255，線性（會被防禦段擠壓，有天然反制）；傷害 ×1.5（暫定）。
       <br />✅ 攻速＝武器間隔 ÷（1 ＋ 60% × 敏捷 ÷（敏捷＋128））；槍類不吃敏捷。
       <br />✅ 閃避＝（40% × 守方敏捷 ÷ 255）×（1 − 0.5 × 攻方靈巧 ÷ 255）：靈巧最多壓掉一半，防禦永遠還在。
-      <br />⏳ 待定：招架、格檔、要害、碾壓、平衡擲骰公式、暴擊倍率。
+      <br />🧪 平衡（試行）＝武器平衡 ×（1＋放大率），上限 80%；
+      放大率＝ 60% × 靈巧 ÷（靈巧＋128），低靈巧每點更有效（64 → +20%、128 → +30%、255 → 約 +40%）。
+      傷害以「最小傷＋範圍×平衡」為中心呈鐘形分佈（標準差＝範圍×0.2，暫定）。
+      <br />⏳ 待定：招架、格檔、要害、碾壓、暴擊倍率。
     </p>
   </div>
 
@@ -140,6 +161,7 @@
     </div>
   </div>
 
+  <div class="pg-bottom">
   <div class="pg-cost">
     <h3>屬性升級花費（起始 10）</h3>
     <table>
@@ -155,6 +177,23 @@
       </tbody>
     </table>
     <div class="muted">單屬性點滿 444,000；六邊形全滿 2,664,000。</div>
+  </div>
+  <div class="pg-histo">
+    <h3>傷害分布（中心＝平衡位置）</h3>
+    {#if histogram && damageStats}
+      <div class="histo">
+        {#each histogram as height, i (i)}
+          <div class="histo-bar" style="height: {Math.max(2, height * 100)}%"></div>
+        {/each}
+      </div>
+      <div class="histo-axis">
+        <span>{damageStats.min}</span>
+        <span>{damageStats.max}</span>
+      </div>
+    {:else}
+      <div class="muted">（按「擲骰」後顯示）</div>
+    {/if}
+  </div>
   </div>
 
   <div class="pg-table">
@@ -192,7 +231,10 @@
         〜
         <input type="number" min="0" max="9999" bind:value={weaponMax} />
       </label>
-      <span class="muted">（傷害＝區間擲骰＋力量；平衡未定案，暫用均勻擲骰；暴擊 ×{CRIT_MULTIPLIER}）</span>
+      <label>武器平衡（%）
+        <input type="number" min="0" max="80" bind:value={weaponBalance} />
+      </label>
+      <span class="muted">實際平衡 {(balance * 100).toFixed(0)}%（靈巧加強，上限 80%）；暴擊 ×{CRIT_MULTIPLIER}</span>
     </div>
     <div class="sample-controls">
       <label>武器出手間隔（秒）

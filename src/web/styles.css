@@ -248,6 +248,33 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.histo {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 90px;
+  margin-top: 12px;
+  padding: 4px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: #15161c;
+}
+
+.histo-bar {
+  flex: 1;
+  background: var(--accent-2);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+}
+
+.histo-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
 .rank-badge {
   display: inline-block;
   min-width: 18px;
@@ -265,7 +292,15 @@ body {
 .rank-A { background: #b04bd9; }
 .rank-S { background: #e0954b; }
 
-.pg-cost h3 {
+.pg-bottom {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.pg-cost h3,
+.pg-histo h3 {
   margin: 0 0 10px;
   font-size: 14px;
   color: var(--accent-2);

@@ -15,3 +15,41 @@ export function hasteBonus(agi: number): number {
 export function attackInterval(baseInterval: number, agi: number, agiApplies = true): number {
   return agiApplies ? baseInterval / (1 + hasteBonus(agi)) : baseInterval;
 }
+
+/**
+ * 平衡（Mabinogi 式）：武器自帶平衡值（越好的武器越高），
+ * 靈巧以「乘法放大」加強它，上限 80%。傷害擲骰是以
+ * 「最小傷 ＋ 範圍 × 平衡」為中心的高斯分佈，超出大小傷範圍夾回。
+ *
+ * 靈巧放大走飽和曲線（低靈巧每點更有效）：
+ * 放大率 ＝ 60% × 靈巧 ÷（靈巧＋128）→ 64 點 +20%、128 點 +30%、255 點約 +40%。
+ * 鐘形標準差 ＝ 範圍 × 0.2（暫定）。
+ */
+const BALANCE_CAP = 0.8;
+const BALANCE_AMP_CAP = 0.6;
+const BALANCE_AMP_K = 128;
+const BALANCE_SPREAD = 0.2;
+
+export function effectiveBalance(weaponBalance: number, dex: number): number {
+  const amp = (BALANCE_AMP_CAP * dex) / (dex + BALANCE_AMP_K);
+  return Math.min(BALANCE_CAP, weaponBalance * (1 + amp));
+}
+
+/** Box-Muller：把兩個均勻隨機轉成標準常態 */
+function gaussian(rng: () => number): number {
+  const u1 = Math.max(rng(), 1e-12);
+  const u2 = rng();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+export function balanceRoll(
+  rng: () => number,
+  min: number,
+  max: number,
+  balance: number,
+): number {
+  const range = max - min;
+  const center = min + range * balance;
+  const roll = center + gaussian(rng) * range * BALANCE_SPREAD;
+  return Math.min(max, Math.max(min, roll));
+}
