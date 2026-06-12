@@ -36,9 +36,11 @@
   // 真傷：第一階段有過就打固定值，不計增傷、防禦、折減
   let trueDamageMode = $state(false);
   let trueDamageValue = $state(15);
-  // 守方防禦數值：減算（防具總和）與減成（防禦倍率）
-  let defenseFlat = $state(0);
-  let defenseReduction = $state(0);
+  // 攻方增傷效果%（技能倍率、增傷 buff 比例加總）
+  let damageBonus = $state(0);
+  // 守方防禦數值：護甲值總和（減算）與減傷率（減成）
+  let armorTotal = $state(0);
+  let reductionRate = $state(0);
 
   const table = $derived(
     buildAttackTable({
@@ -80,6 +82,7 @@
 
   interface DamageStats {
     hits: number;
+    noBreak: number;
     total: number;
     mean: number;
     min: number;
@@ -99,6 +102,7 @@
     const rng = createRng(Date.now() >>> 0);
     const counts = new Map<AttackOutcome, number>();
     const damages: number[] = [];
+    let noBreak = 0;
     const lo = Math.min(weaponMin, weaponMax);
     const hi = Math.max(weaponMin, weaponMax);
     for (let i = 0; i < sampleSize; i++) {
@@ -110,12 +114,14 @@
           damages.push(trueDamageValue);
         } else {
           const base = balanceRoll(rng, lo, hi, balance) + attacker.str;
-          damages.push(
-            resolveDamage(outcome, base, {
-              flat: defenseFlat,
-              multiplier: 1 - defenseReduction / 100,
-            }),
+          const result = resolveDamage(
+            outcome,
+            base,
+            { armor: armorTotal, reductionRate: reductionRate / 100 },
+            1 + damageBonus / 100,
           );
+          damages.push(result.damage);
+          if (!result.brokeDefense) noBreak++;
         }
       }
     }
@@ -127,6 +133,7 @@
       const total = damages.reduce((sum, d) => sum + d, 0);
       damageStats = {
         hits: damages.length,
+        noBreak,
         total,
         mean: total / damages.length,
         min: damages[0],
@@ -170,7 +177,10 @@
       <br />✅ 格檔＝盾牌提供 30〜45%（0＝無盾），固定減傷 60%；可擋單體鎖定效果（範圍擋不住）——待 buff/debuff 系統。
       <br />✅ 暴擊倍率定案 ×1.5；要害已移除；槍不可暴擊（槍手的幸運只剩躲避）。
       <br />✅ 碾壓＝頭目普攻限定，統一預設 15%（各頭目可自訂）、傷害 ×2；防禦堆高時在命中歸零後第一個被擠出。
-      <br />✅ 兩階段：骰表出標籤 → 增傷（暴擊/碾壓）→ 減算（防具總和）→ 減成（防禦倍率）→ 招架/格檔折減。
+      <br />✅ 兩階段：骰表出標籤 → 攻方增傷先乘（暴擊/碾壓/技能/增傷效果）→ 破防判定
+      → 減算（護甲值總和）→ 減成（減傷率）→ 招架/格檔折減。
+      <br />✅ 未破防＝來襲傷害 ≤ 護甲值總和：傷害 1（暫定）、該次攻擊特效不發動（例外由技能宣告）。
+      <br />✅ 數值修飾統一規則：裝備詞綴先改裝備本身；實際值＝（基準＋固定值加總）×（1＋比例加總），最低 0。
       <br />✅ 真傷＝骰到什麼都算命中，打固定值，不計增傷、防禦與折減。
       <br />⏳ 待定：鐘形寬度、各段適用預設表（近戰技/射擊/法術）正式確認。
     </p>
@@ -203,6 +213,12 @@
         <label><input type="checkbox" bind:checked={trueDamageMode} /> 真傷（固定值
           <input class="pg-inline-num" type="number" min="1" max="9999" bind:value={trueDamageValue} />
           ，骰到什麼都算命中，不計增傷與防禦）</label>
+        <label class="pg-attr">
+          <span>增傷%</span>
+          <input type="range" min="0" max="200" bind:value={damageBonus} />
+          <input type="number" min="0" max="999" bind:value={damageBonus} />
+          <span class="muted">技能倍率、增傷效果比例加總</span>
+        </label>
       </div>
     </div>
     <div class="pg-side">
@@ -231,16 +247,16 @@
         <span class="muted">盾牌提供（0＝無盾），減傷 {BLOCK_DAMAGE_REDUCTION * 100}%</span>
       </label>
       <label class="pg-attr pg-equip">
-        <span>防具總和</span>
-        <input type="range" min="0" max="200" bind:value={defenseFlat} />
-        <input type="number" min="0" max="9999" bind:value={defenseFlat} />
-        <span class="muted">減算（−）</span>
+        <span>護甲值總和</span>
+        <input type="range" min="0" max="200" bind:value={armorTotal} />
+        <input type="number" min="0" max="9999" bind:value={armorTotal} />
+        <span class="muted">減算（−）；來襲傷害沒超過它＝未破防</span>
       </label>
       <label class="pg-attr pg-equip">
-        <span>減成%</span>
-        <input type="range" min="0" max="80" bind:value={defenseReduction} />
-        <input type="number" min="0" max="100" bind:value={defenseReduction} />
-        <span class="muted">防禦倍率（buff/debuff/裝備效果）</span>
+        <span>減傷率%</span>
+        <input type="range" min="0" max="80" bind:value={reductionRate} />
+        <input type="number" min="0" max="100" bind:value={reductionRate} />
+        <span class="muted">減成；效果加總後的最終值</span>
       </label>
     </div>
   </div>
@@ -347,6 +363,7 @@
     {#if damageStats}
       <div class="legend damage-stats">
         <span class="legend-item">造成傷害次數：{damageStats.hits}</span>
+        <span class="legend-item">未破防：{damageStats.noBreak}（傷害 1、特效不發動）</span>
         <span class="legend-item">總傷害：{damageStats.total.toLocaleString()}</span>
         <span class="legend-item">平均：{damageStats.mean.toFixed(1)}</span>
         <span class="legend-item">中位數：{damageStats.median}</span>

@@ -85,15 +85,26 @@ describe('攻擊表', () => {
     expect(boss.find((s) => s.outcome === '碾壓')?.width).toBeCloseTo(0.15, 10);
   });
 
-  it('第二階段：增傷 → 減算 → 減成 → 招架/格檔折減', () => {
-    const defense = { flat: 20, multiplier: 0.5 };
-    expect(resolveDamage('命中', 100, defense)).toBe(40); // (100−20)×0.5
-    expect(resolveDamage('暴擊', 100, defense)).toBe(65); // (150−20)×0.5
-    expect(resolveDamage('碾壓', 100, defense)).toBe(90); // (200−20)×0.5
-    expect(resolveDamage('招架', 100, defense)).toBe(28); // 40×0.7
-    expect(resolveDamage('格檔', 100, defense)).toBe(16); // 40×0.4
-    expect(resolveDamage('閃避', 100, defense)).toBe(0);
-    expect(resolveDamage('命中', 10, { flat: 999, multiplier: 1 })).toBe(1); // 最低 1
+  it('第二階段：增傷先乘 → 破防 → 減算 → 減成 → 招架/格檔折減', () => {
+    const defense = { armor: 20, reductionRate: 0.5 };
+    expect(resolveDamage('命中', 100, defense).damage).toBe(40); // (100−20)×0.5
+    expect(resolveDamage('暴擊', 100, defense).damage).toBe(65); // (150−20)×0.5
+    expect(resolveDamage('碾壓', 100, defense).damage).toBe(90); // (200−20)×0.5
+    expect(resolveDamage('招架', 100, defense).damage).toBe(28); // 40×0.7
+    expect(resolveDamage('格檔', 100, defense).damage).toBe(16); // 40×0.4
+    expect(resolveDamage('閃避', 100, defense).damage).toBe(0);
+    expect(resolveDamage('命中', 100, defense, 1.5).damage).toBe(65); // 增傷 +50% 先乘
+  });
+
+  it('未破防：來襲傷害 ≤ 護甲值總和 → 傷害 1、特效不發動；暴擊可幫助破防', () => {
+    const defense = { armor: 20, reductionRate: 0 };
+    const blocked = resolveDamage('命中', 15, defense);
+    expect(blocked.damage).toBe(1);
+    expect(blocked.brokeDefense).toBe(false);
+    // 同樣 15 點基礎傷害，暴擊 ×1.5 ＝ 22.5 > 20，破防
+    const crit = resolveDamage('暴擊', 15, defense);
+    expect(crit.brokeDefense).toBe(true);
+    expect(crit.damage).toBe(3); // 22.5 − 20 ＝ 2.5 → round 3
   });
 
   it('躲避擲得出來', () => {

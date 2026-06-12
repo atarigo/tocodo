@@ -153,29 +153,44 @@ export function rollOutcome(table: TableSegment[], rng: Rng): AttackOutcome {
 }
 
 // ─ 第二階段：傷害計算（已定案 2026-06-12）─
-// 第一階段骰表產出標籤，第二階段依標籤算傷害：
-//   增傷（暴擊 ×1.5／碾壓 ×2）→ 減算（防具總和）→ 減成（防禦倍率）→ 招架/格檔折減
+// 1. 基礎傷害（平衡擲骰＋力量）
+// 2. 攻方增傷先乘：暴擊 ×1.5／碾壓 ×2／技能倍率與增傷效果 → 得到「來襲傷害」
+//    （增傷先乘的理由：暴擊要能幫助破防，混進減傷率會讓暴擊流對高甲目標報廢）
+// 3. 破防判定：來襲傷害 > 護甲值總和？未破防 → 傷害 1（暫定）、該次攻擊特效不發動（例外由技能宣告）
+// 4. 減算（− 護甲值總和）→ 5. 減成（× 1 − 減傷率）→ 6. 招架/格檔折減
 // 真傷不走這裡：第一階段有過就打技能宣告的固定值，不計增傷、不計任何防禦與折減。
+//
+// 數值修飾統一規則：裝備詞綴先改裝備自己的值（組裝時烤死）；
+// 實際值 ＝（基準值 ＋ 固定值效果加總）×（1 ＋ 比例效果加總），最低 0。
+// buff、debuff、攻擊當下特效三種來源一起加總（攻擊特效不是 debuff，可與 debuff 疊加）。
 
 export interface DefenseValues {
-  /** 防具總和（減算） */
-  flat: number;
-  /** 防禦倍率（減成）：1 ＝ 無減免，0.7 ＝ 只受 70% 傷害；buff/debuff/裝備效果都乘在這 */
-  multiplier: number;
+  /** 護甲值總和（減算）：裝備詞綴已烤入、效果加總後的最終值，最低 0 */
+  armor: number;
+  /** 減傷率（減成）：0〜1，效果加總後的最終值，最低 0 */
+  reductionRate: number;
+}
+
+export interface DamageResult {
+  damage: number;
+  /** 破防＝來襲傷害 > 護甲值總和；未破防時該次攻擊的特效不發動 */
+  brokeDefense: boolean;
 }
 
 export function resolveDamage(
   outcome: AttackOutcome,
   base: number,
   defense: DefenseValues,
-): number {
-  if (outcome === '閃避' || outcome === '躲避') return 0;
-  let damage = base;
-  if (outcome === '暴擊') damage *= CRIT_MULTIPLIER;
-  if (outcome === '碾壓') damage *= CRUSH_MULTIPLIER;
-  damage = (damage - defense.flat) * defense.multiplier;
+  /** 攻方增傷效果（技能倍率、增傷 buff 比例加總後），1 ＝ 無增傷 */
+  damageBonus = 1,
+): DamageResult {
+  if (outcome === '閃避' || outcome === '躲避') return { damage: 0, brokeDefense: false };
+  let incoming = base * damageBonus;
+  if (outcome === '暴擊') incoming *= CRIT_MULTIPLIER;
+  if (outcome === '碾壓') incoming *= CRUSH_MULTIPLIER;
+  if (incoming <= defense.armor) return { damage: 1, brokeDefense: false };
+  let damage = (incoming - defense.armor) * (1 - defense.reductionRate);
   if (outcome === '招架') damage *= 1 - PARRY_DAMAGE_REDUCTION;
   if (outcome === '格檔') damage *= 1 - BLOCK_DAMAGE_REDUCTION;
-  // 最低 1（暫定）：防禦是減傷不是抵銷
-  return Math.max(1, Math.round(damage));
+  return { damage: Math.max(1, Math.round(damage)), brokeDefense: true };
 }
