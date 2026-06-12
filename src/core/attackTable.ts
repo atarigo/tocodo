@@ -16,9 +16,8 @@ import type { Rng } from './rng.js';
  * 全部歸零時 = 100% 普通命中。
  *
  * 進度：
- *   已定案：躲避（守方幸運，飽和曲線）、暴擊（攻方幸運，線性）
- *   待定案：閃避（守方敏捷 vs 攻方靈巧）天花板、
- *           招架（無盾也有）、格檔（有盾才有，減傷較高）、
+ *   已定案：閃避（敏捷 vs 靈巧差距）、躲避（守方幸運）、暴擊（攻方幸運）
+ *   待定案：招架（無盾也有）、格檔（有盾才有，減傷較高）、
  *           要害、碾壓（來源待定義）
  */
 export type AttackOutcome =
@@ -56,6 +55,20 @@ export function evadeWidth(luk: number): number {
   return (EVADE_CAP * luk) / (luk + EVADE_K);
 }
 
+// ─ 閃避（已定案 2026-06-12）─
+// 原則：防守天生吃虧——防禦是減傷不是抵銷，不能有靠屬性無解的全防流；
+// 但敏捷不加傷害、是純減傷投資，所以也不能被靈巧完全吃掉。
+// 閃避 =（40% × 守方敏捷 ÷ 255）×（1 − 0.5 × 攻方靈巧 ÷ 255）
+// 敏捷滿 vs 靈巧 0 → 40%；敏捷滿 vs 靈巧滿 → 20%（壓制上限是砍半）。
+const DODGE_CAP = 0.4;
+const DODGE_SUPPRESS_CAP = 0.5;
+
+export function dodgeWidth(defenderAgi: number, attackerDex: number): number {
+  const base = (DODGE_CAP * defenderAgi) / 255;
+  const suppression = 1 - (DODGE_SUPPRESS_CAP * attackerDex) / 255;
+  return base * suppression;
+}
+
 // ─ 暴擊（已定案 2026-06-12）─
 // 線性成長：暴擊在 bar 尾端、會被守方防禦段擠壓，有天然反制，
 // 不像躲避需要曲線自我節制。幸運 255 → 30%。
@@ -70,7 +83,10 @@ export function critWidth(luk: number): number {
 export function buildAttackTable(ctx: AttackTableContext): TableSegment[] {
   // 依優先序填入；空間不夠時後面的段被擠掉，普通命中拿剩餘空間
   const queued: TableSegment[] = [
-    // 閃避段（敏捷 vs 靈巧）：天花板尚未拍板，定案後加入
+    {
+      outcome: '閃避',
+      width: dodgeWidth(ctx.defender.agi, ctx.attacker.dex),
+    },
     {
       outcome: '躲避',
       width: evadeWidth(ctx.defender.luk),

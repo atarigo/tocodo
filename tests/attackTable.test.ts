@@ -30,6 +30,19 @@ describe('攻擊表', () => {
     expect(at(128) - at(0)).toBeGreaterThan(at(255) - at(128));
   });
 
+  it('閃避：靈巧最多壓掉一半，防禦永遠還在', () => {
+    const dodge = (agi: number, dex: number) =>
+      buildAttackTable({
+        attacker: attrs({ dex }),
+        defender: attrs({ agi, luk: 0 }),
+        defenderHasShield: false,
+      }).find((s) => s.outcome === '閃避')?.width ?? 0;
+    expect(dodge(255, 0)).toBeCloseTo(0.4, 10); // 敏捷滿、無壓制
+    expect(dodge(255, 255)).toBeCloseTo(0.2, 10); // 雙方點滿 → 砍半，不歸零
+    expect(dodge(0, 0)).toBe(0); // 沒投資就沒有
+    expect(dodge(200, 150)).toBeLessThan(dodge(200, 10)); // 靈巧仍有壓制效果
+  });
+
   it('躲避擲得出來', () => {
     const table = buildAttackTable({
       attacker: attrs({ dex: 255 }),
