@@ -1,3 +1,15 @@
+// ─ 效果抗性（已定案 2026-06-12）─
+// 所有 debuff 的持續時間受意志影響：滿點意志 −70%（線性）。
+export function debuffDuration(baseDuration: number, wil: number): number {
+  return baseDuration * (1 - (0.7 * wil) / 255);
+}
+
+// 毒系（中毒、劇毒）：體質影響「附加成功率」，滿體質成功率 ×0.7（暫定解讀為相對折減）；
+// 傷害本身不受體質影響。
+export function poisonApplyChance(baseChance: number, vit: number): number {
+  return baseChance * (1 - (0.3 * vit) / 255);
+}
+
 // ─ 生命與精神（已定案 2026-06-12）─
 // 沒有基礎值：全部由屬性提供（起始 10 → 生命 100、精神 50）。
 export function maxHp(vit: number): number {

@@ -4,12 +4,16 @@
     BLOCK_DAMAGE_REDUCTION,
     buildAttackTable,
     CRIT_MULTIPLIER,
+    critWidth,
+    dodgeWidth,
+    evadeWidth,
     PARRY_DAMAGE_REDUCTION,
     resolveDamage,
     rollOutcome,
     type AttackOutcome,
   } from '../core/attackTable.js';
   import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from '../core/formulas.js';
+  import { EFFECTS, type ModifiableValue } from '../core/effectRegistry.js';
   import { createRng } from '../core/rng.js';
   import { ATTR_NAMES, type AttrKey, type Attributes } from '../core/types.js';
   import { attrRank, attrTotalSpent } from '../game/economy.js';
@@ -38,9 +42,51 @@
   let trueDamageValue = $state(15);
   // 攻方增傷效果%（技能倍率、增傷 buff 比例加總）
   let damageBonus = $state(0);
-  // 守方防禦數值：護甲值總和（減算）與減傷率（減成）
+  // 守方防禦數值：護甲值總和（減算）與減傷率（減成）——基準值，效果會再修飾
   let armorTotal = $state(0);
   let reductionRate = $state(0);
+
+  // ─ 效果面板：把名錄裡的數值修飾效果掛到雙方身上 ─
+  const MODIFIER_EFFECTS = EFFECTS.filter((e) => e.kind === '數值修飾');
+  interface AttachedEffect {
+    id: number;
+    name: string;
+    /** 強度：點數型填點數、比例型填 %（正數即可，方向由名錄決定） */
+    value: number;
+  }
+  let nextEffectId = 0;
+  let attackerEffects = $state<AttachedEffect[]>([]);
+  let defenderEffects = $state<AttachedEffect[]>([]);
+
+  function addEffect(list: AttachedEffect[]): void {
+    list.push({ id: nextEffectId++, name: MODIFIER_EFFECTS[0].name, value: 10 });
+  }
+
+  function removeEffect(list: AttachedEffect[], id: number): void {
+    const index = list.findIndex((e) => e.id === id);
+    if (index >= 0) list.splice(index, 1);
+  }
+
+  /** 統一修飾規則：（基準＋固定值加總）×（1＋比例加總），最低 0 */
+  function modified(base: number, effects: AttachedEffect[], target: ModifiableValue): number {
+    let flat = 0;
+    let pct = 0;
+    for (const attached of effects) {
+      const def = MODIFIER_EFFECTS.find((e) => e.name === attached.name);
+      if (!def?.modifier || def.modifier.target !== target) continue;
+      const signed = def.modifier.direction * attached.value;
+      if (def.modifier.unit === '點') flat += signed;
+      else pct += signed / 100;
+    }
+    return Math.max(0, (base + flat) * (1 + pct));
+  }
+
+  const effectiveArmor = $derived(modified(armorTotal, defenderEffects, '護甲值總和'));
+  const effectiveReduction = $derived(
+    Math.min(1, modified(reductionRate / 100, defenderEffects, '減傷率')),
+  );
+  /** 攻速效果作用在攻方：攻速 ×0 ＝ 停止出手 */
+  const attackRate = $derived(modified(1, attackerEffects, '攻速'));
 
   const table = $derived(
     buildAttackTable({
@@ -77,7 +123,9 @@
   let weaponInterval = $state(1.8);
   let agiApplies = $state(true);
 
-  const effectiveInterval = $derived(attackInterval(weaponInterval, attacker.agi, agiApplies));
+  const effectiveInterval = $derived(
+    attackRate > 0 ? attackInterval(weaponInterval, attacker.agi, agiApplies) / attackRate : Infinity,
+  );
   const balance = $derived(effectiveBalance(weaponBalance / 100, attacker.dex));
 
   interface DamageStats {
@@ -117,7 +165,7 @@
           const result = resolveDamage(
             outcome,
             base,
-            { armor: armorTotal, reductionRate: reductionRate / 100 },
+            { armor: effectiveArmor, reductionRate: effectiveReduction },
             1 + damageBonus / 100,
           );
           damages.push(result.damage);
@@ -296,6 +344,68 @@
   </div>
   </div>
 
+  <div class="pg-effects">
+    <h3>效果（數值修飾型）</h3>
+    <div class="pg-inputs">
+      {#each [
+        { title: '攻方效果', list: attackerEffects },
+        { title: '守方效果', list: defenderEffects },
+      ] as group (group.title)}
+        <div class="pg-side">
+          <h4>{group.title}</h4>
+          {#each group.list as effect (effect.id)}
+            {@const def = MODIFIER_EFFECTS.find((e) => e.name === effect.name)}
+            <div class="row">
+              <select bind:value={effect.name}>
+                {#each MODIFIER_EFFECTS as candidate (candidate.name)}
+                  <option value={candidate.name}>
+                    {candidate.name}（{candidate.modifier!.target}{candidate.modifier!.direction > 0 ? '＋' : '−'}）
+                  </option>
+                {/each}
+              </select>
+              <input class="pg-inline-num" type="number" min="0" max="9999" bind:value={effect.value} />
+              <span class="muted">{def?.modifier?.unit === '點' ? '點' : '%'}</span>
+              <button onclick={() => removeEffect(group.list, effect.id)}>✕</button>
+            </div>
+          {/each}
+          <button onclick={() => addEffect(group.list)}>＋ 掛上效果</button>
+        </div>
+      {/each}
+    </div>
+  </div>
+
+  <div class="pg-final">
+    <h3>最終數據（所有修飾計算後，進入公式的值）</h3>
+    <div class="pg-inputs">
+      <div class="pg-side">
+        <h4>攻方</h4>
+        <div class="grid2">
+          <span>生命 {maxHp(attacker.vit)}</span>
+          <span>精神 {maxMp(attacker.wil)}</span>
+          <span>平衡 {(balance * 100).toFixed(1)}%</span>
+          <span>出手間隔 {Number.isFinite(effectiveInterval) ? `${effectiveInterval.toFixed(2)}s` : '停止出手'}</span>
+          <span>攻速倍率 ×{attackRate.toFixed(2)}</span>
+          <span>暴擊率 {canCrit ? (critWidth(attacker.luk) * 100).toFixed(1) : '—（不可暴擊）'}%</span>
+          <span>碾壓率 {crushRate}%</span>
+          <span>增傷 +{damageBonus}%</span>
+        </div>
+      </div>
+      <div class="pg-side">
+        <h4>守方</h4>
+        <div class="grid2">
+          <span>生命 {maxHp(defender.vit)}</span>
+          <span>精神 {maxMp(defender.wil)}</span>
+          <span>閃避 {(dodgeWidth(defender.agi, attacker.dex) * 100).toFixed(1)}%</span>
+          <span>躲避 {(evadeWidth(defender.luk) * 100).toFixed(1)}%</span>
+          <span>招架率 {canBeParried ? parryRate : '—（不可招架）'}%</span>
+          <span>格檔率 {canBeBlocked ? blockRate : '—（不可格檔）'}%</span>
+          <span>護甲值總和 {effectiveArmor.toFixed(1)}</span>
+          <span>減傷率 {(effectiveReduction * 100).toFixed(1)}%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="pg-table">
     <h3>攻擊表</h3>
     <div class="bar">
@@ -370,7 +480,7 @@
         <span class="legend-item">最低：{damageStats.min}</span>
         <span class="legend-item">最高：{damageStats.max}</span>
         <span class="legend-item">每秒傷害：{damageStats.dps.toFixed(1)}</span>
-        <span class="legend-item">擊殺守方需時：{(maxHp(defender.vit) / damageStats.dps).toFixed(1)}s</span>
+        <span class="legend-item">擊殺守方需時：{damageStats.dps > 0 ? `${(maxHp(defender.vit) / damageStats.dps).toFixed(1)}s` : '∞（攻速為 0）'}</span>
       </div>
     {/if}
   </div>

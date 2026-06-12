@@ -194,10 +194,41 @@ body {
 }
 
 .pg-table h3,
-.pg-sample h3 {
+.pg-sample h3,
+.pg-effects h3 {
   margin: 0 0 10px;
   font-size: 14px;
   color: var(--accent-2);
+}
+
+.pg-effects h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pg-effects .row select {
+  flex: 0 1 240px;
+}
+
+.pg-final h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--accent-2);
+}
+
+.pg-final h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pg-final {
+  background: #191b22;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .bar {
