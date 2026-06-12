@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { buildAttackTable, rollOutcome, type AttackOutcome } from '../core/attackTable.js';
+  import { buildAttackTable, CRIT_MULTIPLIER, rollOutcome, type AttackOutcome } from '../core/attackTable.js';
+  import { attackInterval } from '../core/formulas.js';
   import { createRng } from '../core/rng.js';
   import { ATTR_NAMES, type AttrKey, type Attributes } from '../core/types.js';
   import { attrRank, attrTotalSpent } from '../game/economy.js';
@@ -35,6 +36,11 @@
   // 平衡（靈巧影響落點）公式未定案，暫用均勻擲骰。
   let weaponMin = $state(10);
   let weaponMax = $state(30);
+  // 武器基礎出手間隔（秒）；攻速＝間隔 ÷（1＋ 60%×敏捷÷(敏捷+128)），槍類不吃敏捷
+  let weaponInterval = $state(1.8);
+  let agiApplies = $state(true);
+
+  const effectiveInterval = $derived(attackInterval(weaponInterval, attacker.agi, agiApplies));
 
   interface DamageStats {
     hits: number;
@@ -43,6 +49,7 @@
     min: number;
     max: number;
     median: number;
+    dps: number;
   }
   let damageStats = $state<DamageStats | null>(null);
 
@@ -59,7 +66,8 @@
       const outcome = rollOutcome(table, rng);
       counts.set(outcome, (counts.get(outcome) ?? 0) + 1);
       if (DAMAGING.has(outcome)) {
-        damages.push(Math.round(lo + (hi - lo) * rng()) + attacker.str);
+        const raw = lo + (hi - lo) * rng() + attacker.str;
+        damages.push(Math.round(outcome === '暴擊' ? raw * CRIT_MULTIPLIER : raw));
       }
     }
     sampleCounts = [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -75,6 +83,8 @@
         min: damages[0],
         max: damages[damages.length - 1],
         median: damages.length % 2 === 0 ? (damages[mid - 1] + damages[mid]) / 2 : damages[mid],
+        // 每次出手（不論結果）都消耗一個出手間隔
+        dps: total / (sampleSize * effectiveInterval),
       };
     } else {
       damageStats = null;
@@ -90,11 +100,11 @@
       這裡跟正式遊戲完全隔離，我們一段一段加、邊看邊討論，定案後才接進戰鬥引擎。
     </p>
     <p class="step-note">
-      目前進度：<strong>第 1 步——躲避（已定案）</strong>。
-      原則：所有段都由屬性或裝備提供，<strong>沒有預設數值</strong>，屬性 0〜255，全部歸零＝100% 命中。
-      <br />躲避段＝ 12% × 幸運 ÷（幸運＋128），飽和曲線：128 點 → 6%、255 點 → 8%。
-      <strong>不可被壓縮</strong>——這就是命中永遠堆不滿的原因。
-      <br />下一段：閃避（守方敏捷 vs 攻方靈巧），天花板待拍板。
+      原則：所有段都由屬性或裝備提供，<strong>沒有預設數值</strong>，屬性 0〜255、起始 10，全部歸零＝100% 命中。
+      <br />✅ 躲避＝ 12% × 守方幸運 ÷（幸運＋128），飽和曲線、不可壓縮（128 → 6%、255 → 8%）。
+      <br />✅ 暴擊＝ 30% × 攻方幸運 ÷ 255，線性（會被防禦段擠壓，有天然反制）；傷害 ×1.5（暫定）。
+      <br />✅ 攻速＝武器間隔 ÷（1 ＋ 60% × 敏捷 ÷（敏捷＋128））；槍類不吃敏捷。
+      <br />⏳ 待定：閃避（敏捷 vs 靈巧）、招架、格檔、要害、碾壓、平衡擲骰公式。
     </p>
   </div>
 
@@ -181,7 +191,17 @@
         〜
         <input type="number" min="0" max="9999" bind:value={weaponMax} />
       </label>
-      <span class="muted">（傷害＝區間擲骰＋力量；平衡未定案，暫用均勻擲骰）</span>
+      <span class="muted">（傷害＝區間擲骰＋力量；平衡未定案，暫用均勻擲骰；暴擊 ×{CRIT_MULTIPLIER}）</span>
+    </div>
+    <div class="sample-controls">
+      <label>武器出手間隔（秒）
+        <input type="number" min="0.1" max="10" step="0.1" bind:value={weaponInterval} />
+      </label>
+      <label>
+        <input type="checkbox" bind:checked={agiApplies} />
+        攻速吃敏捷（槍類不吃）
+      </label>
+      <span class="muted">實際間隔 {effectiveInterval.toFixed(2)}s</span>
     </div>
     <div class="sample-controls">
       <input type="number" min="100" max="1000000" step="100" bind:value={sampleSize} />
@@ -205,6 +225,7 @@
         <span class="legend-item">中位數：{damageStats.median}</span>
         <span class="legend-item">最低：{damageStats.min}</span>
         <span class="legend-item">最高：{damageStats.max}</span>
+        <span class="legend-item">每秒傷害：{damageStats.dps.toFixed(1)}</span>
       </div>
     {/if}
   </div>

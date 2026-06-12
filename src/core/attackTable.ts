@@ -16,12 +16,10 @@ import type { Rng } from './rng.js';
  * 全部歸零時 = 100% 普通命中。
  *
  * 進度：
- *   第 0 步（完成）：空表——100% 普通命中
- *   第 1 步（現在）：躲避（守方幸運，飽和曲線，已定案）；
- *                   閃避（守方敏捷 vs 攻方靈巧）天花板待拍板
- *   第 2 步：招架（無盾也有）、格檔（有盾才有，減傷較高）
- *   第 3 步：暴擊、要害
- *   第 4 步：碾壓（來源待定義）
+ *   已定案：躲避（守方幸運，飽和曲線）、暴擊（攻方幸運，線性）
+ *   待定案：閃避（守方敏捷 vs 攻方靈巧）天花板、
+ *           招架（無盾也有）、格檔（有盾才有，減傷較高）、
+ *           要害、碾壓（來源待定義）
  */
 export type AttackOutcome =
   | '落空'
@@ -58,6 +56,17 @@ export function evadeWidth(luk: number): number {
   return (EVADE_CAP * luk) / (luk + EVADE_K);
 }
 
+// ─ 暴擊（已定案 2026-06-12）─
+// 線性成長：暴擊在 bar 尾端、會被守方防禦段擠壓，有天然反制，
+// 不像躲避需要曲線自我節制。幸運 255 → 30%。
+const CRIT_CAP = 0.3;
+/** 暴擊倍率（暫定） */
+export const CRIT_MULTIPLIER = 1.5;
+
+export function critWidth(luk: number): number {
+  return (CRIT_CAP * luk) / 255;
+}
+
 export function buildAttackTable(ctx: AttackTableContext): TableSegment[] {
   // 依優先序填入；空間不夠時後面的段被擠掉，普通命中拿剩餘空間
   const queued: TableSegment[] = [
@@ -65,6 +74,11 @@ export function buildAttackTable(ctx: AttackTableContext): TableSegment[] {
     {
       outcome: '躲避',
       width: evadeWidth(ctx.defender.luk),
+    },
+    // 攻方特殊結果：防禦段堆高時最先被擠出表外的一端
+    {
+      outcome: '暴擊',
+      width: critWidth(ctx.attacker.luk),
     },
   ];
 
