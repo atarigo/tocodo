@@ -232,6 +232,67 @@ body {
   padding: 4px 8px;
 }
 
+.sample-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sample-controls label input {
+  width: 80px;
+}
+
+.damage-stats {
+  border-top: 1px solid var(--panel-border);
+  padding-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-badge {
+  display: inline-block;
+  min-width: 18px;
+  text-align: center;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 1px 4px;
+  color: #101117;
+}
+
+.rank-D { background: #8a8fa3; }
+.rank-C { background: #6fbf73; }
+.rank-B { background: #5b8def; }
+.rank-A { background: #b04bd9; }
+.rank-S { background: #e0954b; }
+
+.pg-cost h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--accent-2);
+}
+
+.pg-cost table {
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pg-cost th,
+.pg-cost td {
+  border: 1px solid var(--panel-border);
+  padding: 4px 14px;
+  text-align: right;
+}
+
+.pg-cost th:first-child,
+.pg-cost td:first-child {
+  text-align: left;
+}
+
+.pg-cost .muted {
+  margin-top: 6px;
+}
+
 /* ─ 左欄 ─ */
 .section {
   margin-bottom: 18px;
