@@ -755,3 +755,144 @@ button.danger {
 .kind-shop {
   color: #9ad1f0;
 }
+
+/* ─ 戰報：可讀性（debug 取向） ─ */
+.line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.time-chip {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: #6a7088;
+  background: #14151b;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+  text-align: right;
+}
+
+.line-text {
+  flex: 1;
+}
+
+.line.divider {
+  display: block;
+  margin: 8px 0 4px;
+  padding: 3px 8px;
+  background: #232633;
+  border-left: 3px solid var(--accent-2);
+  border-radius: 4px;
+  color: var(--text);
+  font-weight: bold;
+}
+
+.line.flavor-crit .line-text {
+  color: #f0a04b;
+  font-weight: bold;
+}
+
+/* ─ 左欄分頁 ─ */
+.panel-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--panel-border);
+  padding-bottom: 8px;
+}
+
+.panel-tabs button {
+  flex: 1;
+  font-size: 13px;
+  padding: 5px 0;
+}
+
+.panel-tabs button.active {
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+}
+
+.gold {
+  color: #f0c75e;
+}
+
+/* ─ 戰鬥舞台特效 ─ */
+.dot-wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.magic-circle {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px dashed rgba(91, 141, 239, 0.8);
+  box-shadow: 0 0 14px rgba(91, 141, 239, 0.35) inset, 0 0 10px rgba(91, 141, 239, 0.3);
+  animation: spin 1.6s linear infinite;
+}
+
+.magic-circle::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(91, 141, 239, 0.5);
+  animation: spin 2.4s linear infinite reverse;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ice-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  color: #aee4ff;
+  text-shadow: 0 0 8px #57b9e8;
+  pointer-events: none;
+}
+
+.dot-wrap.is-frozen .dot {
+  filter: saturate(0.3) brightness(1.25) hue-rotate(160deg);
+}
+
+.anim-attack-heavy {
+  animation: lungeHeavy 0.35s ease;
+}
+
+.anim-hit-heavy {
+  animation: shakeHeavy 0.4s ease;
+}
+
+.anim-dot {
+  animation: dotPulse 0.4s ease;
+}
+
+@keyframes lungeHeavy {
+  30% { transform: translateX(20px) scale(1.2); }
+  100% { transform: none; }
+}
+
+@keyframes shakeHeavy {
+  15% { transform: translateX(-10px) scale(0.92); }
+  35% { transform: translateX(8px); }
+  55% { transform: translateX(-6px); }
+  75% { transform: translateX(4px); }
+  100% { transform: none; }
+}
+
+@keyframes dotPulse {
+  50% { box-shadow: 0 0 14px rgba(201, 139, 217, 0.9); transform: scale(0.94); }
+  100% { transform: none; }
+}

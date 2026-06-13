@@ -1,12 +1,15 @@
-import { newGame, type GameState } from '../state/model.js';
-import type { BattleResult, EventKind } from '../core/combat.js';
+import { newGame, SAVE_VERSION, type GameState } from '../state/model.js';
+import type { BattleResult, EventKind, HurtFlavor } from '../core/combat.js';
 
 export type Phase = 'idle' | 'battle' | 'decision' | 'dead';
 
 export interface LogLine {
   id: number;
   text: string;
-  kind: EventKind | 'reward' | 'shop';
+  kind: EventKind | 'reward' | 'shop' | 'divider';
+  /** 戰鬥內時間戳（秒），系統訊息沒有 */
+  t?: number;
+  flavor?: HurtFlavor;
 }
 
 export interface RunState {
@@ -29,7 +32,11 @@ const MAX_LOG_LINES = 800;
 function loadGame(): GameState {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) return JSON.parse(raw) as GameState;
+    if (raw) {
+      const parsed = JSON.parse(raw) as GameState;
+      // 不相容的舊存檔直接重開世界
+      if (parsed.version === SAVE_VERSION) return parsed;
+    }
   } catch {
     // 壞掉的存檔直接重開世界
   }
@@ -50,8 +57,8 @@ export const ui = $state({
 
 let logId = 0;
 
-export function pushLog(text: string, kind: LogLine['kind'] = 'system'): void {
-  ui.log.push({ id: logId++, text, kind });
+export function pushLog(text: string, kind: LogLine['kind'] = 'system', t?: number, flavor?: HurtFlavor): void {
+  ui.log.push({ id: logId++, text, kind, t, flavor });
   if (ui.log.length > MAX_LOG_LINES) ui.log.splice(0, ui.log.length - MAX_LOG_LINES);
 }
 
@@ -66,5 +73,5 @@ export function resetWorld(): void {
   ui.run = null;
   ui.battle = null;
   ui.log.length = 0;
-  pushLog('世界已重置。');
+  pushLog('世界已重置');
 }
