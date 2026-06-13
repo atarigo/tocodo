@@ -1,44 +1,25 @@
 import type { Weapon } from '../core/types.js';
 
-/** 空手：沒有武器時的預設 */
-export const FIST: Weapon = {
-  id: 'fist',
-  name: '空手',
-  rank: 'D',
-  kind: '近戰',
-  damage: [2, 5],
-  interval: 1.6,
-  strScaling: 1.0,
-  agiSpeed: true,
-  dexSpread: true,
-  description: '赤手空拳。',
-};
-
+/**
+ * 武器：大小傷、平衡（擲骰中心）、出手間隔、招架率（5%〜25%）。
+ * 空手不是武器：沒有武器＝沒有普攻。
+ * 槍：傷害不吃力量、射速不吃敏捷、平衡不吃靈巧放大。
+ */
 export const WEAPONS: readonly Weapon[] = [
-  // 近戰：傷害吃力量、速度吃敏捷、大小傷吃靈巧
+  // ─ 近戰 ─
   {
     id: 'iron-sword', price: 50,
     name: '鐵劍',
     rank: 'D',
     kind: '近戰',
     damage: [8, 14],
+    balance: 0.45,
     interval: 1.8,
-    strScaling: 1.2,
-    agiSpeed: true,
-    dexSpread: true,
-    description: '可靠的入門武器。',
-  },
-  {
-    id: 'greatsword', price: 150,
-    name: '巨劍',
-    rank: 'C',
-    kind: '近戰',
-    damage: [14, 30],
-    interval: 2.8,
-    strScaling: 1.6,
-    agiSpeed: true,
-    dexSpread: true,
-    description: '沉重而致命，大小傷區間極大，吃發揮度。',
+    strApplies: true,
+    agiApplies: true,
+    dexAmp: true,
+    parryRate: 0.1,
+    description: '可靠的入門武器。平衡 45%、招架 10%。',
   },
   {
     id: 'dagger', price: 50,
@@ -46,24 +27,42 @@ export const WEAPONS: readonly Weapon[] = [
     rank: 'D',
     kind: '近戰',
     damage: [5, 9],
+    balance: 0.55,
     interval: 1.1,
-    strScaling: 0.7,
-    agiSpeed: true,
-    dexSpread: true,
-    description: '出手極快，適合敏捷型。',
+    strApplies: true,
+    agiApplies: true,
+    dexAmp: true,
+    parryRate: 0.2,
+    description: '出手極快、好招架（20%），單發傷害低。',
   },
-  // 槍：傷害只看武器與子彈、射速只看武器、不吃力量敏捷
+  {
+    id: 'greatsword', price: 150,
+    name: '巨劍',
+    rank: 'C',
+    kind: '近戰',
+    damage: [16, 34],
+    balance: 0.35,
+    interval: 2.8,
+    strApplies: true,
+    agiApplies: true,
+    dexAmp: true,
+    parryRate: 0.05,
+    description: '沉重而致命。平衡僅 35%——靈巧低的人甩不出它的上限。',
+  },
+  // ─ 槍 ─
   {
     id: 'pistol', price: 50,
     name: '手槍',
     rank: 'D',
     kind: '槍',
     damage: [12, 16],
+    balance: 0.6,
     interval: 1.3,
-    strScaling: 0,
-    agiSpeed: false,
-    dexSpread: false,
-    description: '傷害不高，但穩定且不依賴屬性，靠機制配合取勝。',
+    strApplies: false,
+    agiApplies: false,
+    dexAmp: false,
+    parryRate: 0.05,
+    description: '數值完全由武器決定：不吃力量、敏捷、靈巧。',
   },
   {
     id: 'rifle', price: 150,
@@ -71,36 +70,42 @@ export const WEAPONS: readonly Weapon[] = [
     rank: 'C',
     kind: '槍',
     damage: [24, 32],
+    balance: 0.65,
     interval: 2.2,
-    strScaling: 0,
-    agiSpeed: false,
-    dexSpread: false,
-    description: '射速固定，傷害區間穩定。',
+    strApplies: false,
+    agiApplies: false,
+    dexAmp: false,
+    parryRate: 0.05,
+    description: '射速固定、傷害穩定，不可暴擊。',
   },
-  // 弓：傷害吃力量，其餘同近戰
+  // ─ 弓 ─
   {
     id: 'hunting-bow', price: 50,
     name: '獵弓',
     rank: 'D',
     kind: '弓',
     damage: [9, 19],
+    balance: 0.4,
     interval: 2.0,
-    strScaling: 1.0,
-    agiSpeed: true,
-    dexSpread: true,
+    strApplies: true,
+    agiApplies: true,
+    dexAmp: true,
+    parryRate: 0.05,
     description: '吃力量的遠程武器。',
   },
-  // 法杖：拿來敲是近戰，特效在詠唱與精神
+  // ─ 法杖 ─
   {
     id: 'apprentice-staff', price: 50,
     name: '學徒法杖',
     rank: 'D',
     kind: '法杖',
     damage: [4, 8],
+    balance: 0.4,
     interval: 2.0,
-    strScaling: 0.5,
-    agiSpeed: true,
-    dexSpread: true,
+    strApplies: true,
+    agiApplies: true,
+    dexAmp: true,
+    parryRate: 0.08,
     castTimeMult: 0.85,
     mpCostMult: 0.9,
     description: '詠唱時間 −15%、精神消耗 −10%。拿來敲人也行，就是不太痛。',
@@ -111,17 +116,19 @@ export const WEAPONS: readonly Weapon[] = [
     rank: 'B',
     kind: '法杖',
     damage: [5, 10],
+    balance: 0.5,
     interval: 2.2,
-    strScaling: 0.5,
-    agiSpeed: true,
-    dexSpread: true,
+    strApplies: true,
+    agiApplies: true,
+    dexAmp: true,
+    parryRate: 0.08,
     castTimeMult: 0.7,
     mpCostMult: 0.8,
-    description: '詠唱時間 −30%、精神消耗 −20%。',
+    description: '詠唱時間 −30%、精神消耗 −20%。副本限定。',
   },
 ];
 
-export const WEAPON_BY_ID = new Map([FIST, ...WEAPONS].map((w) => [w.id, w]));
+export const WEAPON_BY_ID = new Map(WEAPONS.map((w) => [w.id, w]));
 
 export function getWeapon(id: string): Weapon {
   const weapon = WEAPON_BY_ID.get(id);
