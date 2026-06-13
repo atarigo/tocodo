@@ -1,27 +1,3 @@
-/** 技能的流派分類，未來供協同裝備、偉業條件等掛勾 */
-export type Tag = '物理' | '火焰' | '冰霜' | '血祭' | '槍械' | '治癒';
-
-/** 六主屬性 */
-export interface Attributes {
-  str: number; // 力量
-  vit: number; // 體質
-  agi: number; // 敏捷
-  dex: number; // 靈巧
-  wil: number; // 意志
-  luk: number; // 幸運
-}
-
-export type AttrKey = keyof Attributes;
-
-export const ATTR_NAMES: Record<AttrKey, string> = {
-  str: '力量',
-  vit: '體質',
-  agi: '敏捷',
-  dex: '靈巧',
-  wil: '意志',
-  luk: '幸運',
-};
-
 /** 五階制：所有內容（武器、裝備、技能、效果優先度、價格）都掛階級 */
 export type Rank = 'D' | 'C' | 'B' | 'A' | 'S';
 
@@ -40,6 +16,27 @@ export interface Priced {
   secretPrice?: number;
 }
 
+/** 六主屬性：範圍 0〜255、起始 10；沒有預設數值，基本狀態全由屬性或裝備提供 */
+export interface Attributes {
+  str: number; // 力量：傷害固定值直加
+  vit: number; // 體質：生命 ×10、毒系附加成功率折減
+  agi: number; // 敏捷：攻速（依武器宣告）、閃避
+  dex: number; // 靈巧：命中（壓制閃避）、平衡放大
+  wil: number; // 意志：精神 ×5、debuff 縮時
+  luk: number; // 幸運：暴擊（攻）、躲避（守）
+}
+
+export type AttrKey = keyof Attributes;
+
+export const ATTR_NAMES: Record<AttrKey, string> = {
+  str: '力量',
+  vit: '體質',
+  agi: '敏捷',
+  dex: '靈巧',
+  wil: '意志',
+  luk: '幸運',
+};
+
 export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
 
 export interface Weapon extends Priced {
@@ -47,55 +44,65 @@ export interface Weapon extends Priced {
   name: string;
   rank: Rank;
   kind: WeaponKind;
-  /** 大小傷：浮動區間 [最小, 最大] */
+  /** 大小傷區間 */
   damage: [number, number];
-  /** 普攻基礎間隔（秒） */
+  /** 武器自帶平衡（0〜0.8）：擲骰中心的位置 */
+  balance: number;
+  /** 普攻基礎出手間隔（秒） */
   interval: number;
-  /** 普攻傷害 += 力量 × 係數（槍類為 0） */
-  strScaling: number;
-  /** 出手速度是否吃敏捷（槍類只看武器） */
-  agiSpeed: boolean;
-  /** 大小傷是否吃發揮度（槍類不吃） */
-  dexSpread: boolean;
-  /** 法杖類特效 */
+  /** 傷害吃不吃力量（槍不吃） */
+  strApplies: boolean;
+  /** 攻速吃不吃敏捷（槍不吃） */
+  agiApplies: boolean;
+  /** 平衡吃不吃靈巧放大（槍不吃） */
+  dexAmp: boolean;
+  /** 招架率：一般武器 5%〜25% */
+  parryRate: number;
+  /** 法杖特效 */
   castTimeMult?: number;
   mpCostMult?: number;
   description: string;
 }
 
-export type StatusKind = 'dot' | 'stun' | 'slow' | 'defDown';
+export type GearSlot = '副手' | '防具' | '飾品';
 
-export interface StatusDef {
-  /** 同名效果只會存在一份（高優先度取代低優先度） */
+export interface Gear extends Priced {
   id: string;
-  kind: StatusKind;
-  /** 意志抵抗縮短持續；感染類另由體質減低強度 */
-  resistedBy: 'wil' | 'vit';
+  name: string;
+  rank: Rank;
+  slot: GearSlot;
+  attrs?: Partial<Attributes>;
+  /** 護甲值（減算用） */
+  armor?: number;
+  /** 減傷率（0〜1） */
+  reductionRate?: number;
+  /** 格檔率：只有盾牌會給（30%〜45%） */
+  blockRate?: number;
   description: string;
 }
 
-export interface StatusApplication {
-  statusId: string;
-  /** 效果覆蓋的優先度，各技能自行設計 */
-  priority: number;
+/** 技能附加的效果（名稱對應效果名錄） */
+export interface EffectSpec {
+  name: string;
+  /** 點數型填點數、比例型填 %、跳動型填每秒量；開關型免填 */
+  value: number;
   /** 秒 */
   duration: number;
-  /** dot = 每秒傷害；slow = 間隔增加比例；defDown = 減算扣減 */
-  magnitude: number;
+  /** 覆蓋優先度（慣例＝技能階級的 RANK_PRIORITY） */
+  priority: number;
 }
 
 export interface SkillDamage {
-  base: number;
-  /** 吃武器傷害區間的倍率（不吃武器則省略） */
+  /** 吃武器大小傷的倍率 */
   weaponMult?: number;
-  /** 武器部分是否吃發揮度（近戰技通常不吃 = 靈巧不影響大小傷） */
-  spread?: boolean;
-  /** 每點屬性的增傷係數，由各技能自行宣告 */
+  /** 固定基礎值 */
+  base?: number;
+  /** 各屬性增傷係數（每點加多少） */
   scaling?: Partial<Attributes>;
-  /** 穿透：不計減算（−），仍吃減成（％） */
+  /** 穿透：無視護甲值總和（必定破防），仍吃減傷率 */
   pierce?: boolean;
-  /** 真傷：不計任何防禦 */
-  trueDamage?: boolean;
+  /** 真傷：骰到什麼都算命中，打固定值，不計增傷、防禦與折減 */
+  trueDamage?: number;
   canCrit?: boolean;
 }
 
@@ -103,37 +110,39 @@ export interface Skill extends Priced {
   id: string;
   name: string;
   rank: Rank;
-  tag: Tag;
-  /** 需要特定武器類型才能施放 */
+  /** 需要特定武器類型 */
   weaponKind?: WeaponKind;
-  /** 秒；0 = 瞬發 */
+  /** 秒；0 ＝ 瞬發 */
   castTime: number;
-  /** 秒 */
   cooldown: number;
   mpCost: number;
-  /** 命中判定吃哪個屬性；null = 必中（自身效果類） */
-  hitAttr: 'agi' | 'dex' | null;
+  /** 此攻擊可否被招架（近戰可；射擊、法術撥不開） */
+  canBeParried: boolean;
+  /** 此攻擊可否被格檔（盾牌連火球都擋得住） */
+  canBeBlocked: boolean;
   damage?: SkillDamage;
   heal?: { base: number; scaling?: Partial<Attributes> };
-  applies?: StatusApplication[];
+  applies?: EffectSpec[];
+  /** 未破防仍可附加效果（少數例外，例如純 debuff 技） */
+  effectsIgnoreBreak?: boolean;
   description: string;
 }
 
-/** 防禦兩段式：減算（−）與減成（％）；招架另有專屬減傷 */
-export interface DefenseProfile {
-  flat: number;
-  pct: number;
-  parryFlat: number;
-  parryPct: number;
-}
-
-/** 戰鬥模擬器的輸入單位，與養成、敵人生成解耦 */
+/** 戰鬥單位：養成／敵人生成組裝後的結果，引擎只認這個 */
 export interface Unit {
   name: string;
   attrs: Attributes;
-  defense: DefenseProfile;
-  weapon: Weapon;
+  /** null ＝ 空手：沒有普攻 */
+  weapon: Weapon | null;
+  /** 招架率（武器提供）、格檔率（盾牌提供） */
+  parryRate: number;
+  blockRate: number;
+  /** 護甲值總和（裝備加總）與減傷率 */
+  armor: number;
+  reductionRate: number;
+  /** 碾壓率：頭目普攻限定 */
+  crushRate: number;
+  /** 增傷倍率（世界效果等），1 ＝ 無 */
+  damageBonus: number;
   skills: Skill[];
-  /** 世界效果等全域加成（1 = 無加成） */
-  damageMult: number;
 }
