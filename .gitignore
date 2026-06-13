@@ -1,3 +1,5 @@
 node_modules/
 save.json
 dist/
+.claude/
+CLAUDE.md
