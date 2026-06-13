@@ -1,5 +1,4 @@
-import type { Attributes } from '../core/types.js';
-import type { GearSlot } from '../data/gear.js';
+import type { Attributes, GearSlot } from '../core/types.js';
 
 /**
  * 一條命的所有東西都掛在角色身上：貨幣、道具、技能。
@@ -7,7 +6,7 @@ import type { GearSlot } from '../data/gear.js';
  */
 export interface CharacterState {
   name: string;
-  /** 已含購買累計的六主屬性 */
+  /** 六主屬性：0〜255、起始 10，用貨幣升級 */
   attrs: Attributes;
   /** 單一貨幣：升屬性、買裝備道具，活著的一切開銷 */
   currency: number;
@@ -21,18 +20,22 @@ export interface CharacterState {
 }
 
 export interface GameState {
+  /** 存檔版本：不相容的舊存檔直接重開世界 */
+  version: number;
   era: number;
   /** 純紀錄，不影響遊戲性 */
   records: { lives: number; bestFloor: number };
   character: CharacterState | null;
 }
 
-export const BASE_ATTRS: Attributes = { str: 5, vit: 5, agi: 5, dex: 5, wil: 5, luk: 5 };
-export const STARTING_CURRENCY = 200;
-export const MAX_SKILL_SLOTS = 4;
+export const SAVE_VERSION = 3;
+
+export const BASE_ATTRS: Attributes = { str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 };
+export const STARTING_CURRENCY = 300;
+export const MAX_SKILL_SLOTS = 5;
 
 export function newGame(): GameState {
-  return { era: 1, records: { lives: 0, bestFloor: 0 }, character: null };
+  return { version: SAVE_VERSION, era: 1, records: { lives: 0, bestFloor: 0 }, character: null };
 }
 
 export function createCharacter(name: string): CharacterState {

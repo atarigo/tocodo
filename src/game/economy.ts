@@ -1,10 +1,4 @@
-import type { AttrKey, Priced, Rank } from '../core/types.js';
-import { BASE_ATTRS } from '../state/model.js';
-
-/** 下一點主屬性的價格（舊原型公式，現行遊戲暫用；整合攻擊表時改用下方定案版） */
-export function attrPrice(key: AttrKey, current: number): number {
-  return (current - BASE_ATTRS[key] + 1) * 10;
-}
+import type { Priced, Rank } from '../core/types.js';
 
 // ─ 屬性升級花費（已定案 2026-06-12；A/S 級調漲）─
 // 起始 10、上限 255；費用依「目標值」所在區間計價，區間即屬性的階級標記。
@@ -28,7 +22,7 @@ export function attrRank(value: number): Rank {
   return 'S';
 }
 
-/** 從 current 升到 current+1 的點數花費 */
+/** 從 current 升到 current+1 的貨幣花費 */
 export function attrUpgradeCost(current: number): number {
   const target = Math.min(current + 1, ATTR_MAX);
   for (const bracket of ATTR_BRACKETS) {
@@ -54,7 +48,7 @@ export function shopPrice(item: Priced): number | null {
   return item.price ?? null;
 }
 
-/** 攻克一層的貨幣報酬 */
+/** 攻克一層的貨幣報酬（暫定，配合屬性花費的量級） */
 export function floorReward(floor: number, isBoss: boolean): number {
-  return (12 + 8 * floor) * (isBoss ? 2 : 1);
+  return (40 + 30 * floor) * (isBoss ? 2 : 1);
 }

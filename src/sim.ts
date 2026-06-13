@@ -1,5 +1,6 @@
 /**
- * 平衡模擬工具：四種典型流派打各層敵人，看勝率與戰鬥時長。
+ * 平衡模擬工具：四種典型流派打各層敵人，看勝率。
+ * 屬性成長以「每層約可換 8 點 D 級屬性」近似（實際走貨幣經濟）。
  * 用法：pnpm sim
  */
 import { simulateBattle } from './core/combat.js';
@@ -8,17 +9,18 @@ import { makeEnemy } from './core/dungeon.js';
 import { createRng } from './core/rng.js';
 import { addAttrs } from './core/attributes.js';
 import { BASE_ATTRS, createCharacter, type CharacterState } from './state/model.js';
-import type { Attributes } from './core/types.js';
+import type { Attributes, GearSlot } from './core/types.js';
 
 const BATTLES_PER_CELL = 200;
 const MAX_FLOOR = 15;
+const POINTS_PER_FLOOR = 8;
 
 interface BuildSpec {
   name: string;
   /** 屬性點分配比例 */
   ratio: Partial<Attributes>;
   weapon: string;
-  gear: { 防具?: string; 副手?: string; 飾品?: string };
+  gear: Partial<Record<GearSlot, string>>;
   skills: string[];
 }
 
@@ -32,7 +34,7 @@ const BUILDS: BuildSpec[] = [
   },
   {
     name: '槍手',
-    ratio: { dex: 4, luk: 2, vit: 2, agi: 1 },
+    ratio: { dex: 4, vit: 3, agi: 2 },
     weapon: 'rifle',
     gear: { 防具: 'leather-armor', 飾品: 'marksman-goggles' },
     skills: ['piercing-shot', 'venom-round', 'concussion-round'],
@@ -40,9 +42,9 @@ const BUILDS: BuildSpec[] = [
   {
     name: '法師',
     ratio: { wil: 5, vit: 2, agi: 1 },
-    weapon: 'sage-staff',
+    weapon: 'apprentice-staff',
     gear: { 防具: 'cloth-robe', 飾品: 'meditation-pendant' },
-    skills: ['flame-burst', 'fireball', 'ice-bolt', 'heal'],
+    skills: ['fireball', 'ice-bolt', 'corrode-armor', 'heal'],
   },
   {
     name: '魔戰士',
@@ -53,9 +55,8 @@ const BUILDS: BuildSpec[] = [
   },
 ];
 
-/** 假設每層約可換到 2.5 點主屬性（實際走貨幣經濟，這裡取近似值看平衡） */
 function buildCharacter(spec: BuildSpec, floor: number): CharacterState {
-  const points = Math.round(2.5 * (floor - 1));
+  const points = POINTS_PER_FLOOR * (floor - 1);
   const totalRatio = Object.values(spec.ratio).reduce((a, b) => a + b, 0);
   const bonus: Partial<Attributes> = {};
   for (const [key, r] of Object.entries(spec.ratio)) {
@@ -69,7 +70,7 @@ function buildCharacter(spec: BuildSpec, floor: number): CharacterState {
   return character;
 }
 
-const rng = createRng(20260612);
+const rng = createRng(20260613);
 
 const header = ['層數', ...BUILDS.map((b) => b.name.padStart(6))].join(' | ');
 console.log(header);
