@@ -1,84 +1,132 @@
-import type { StatusApplication } from './types.js';
-import { getStatus } from '../data/statuses.js';
-import type { Derived } from './attributes.js';
+import { EFFECT_BY_NAME, type ModifiableValue } from './effectRegistry.js';
+import { debuffDuration, poisonApplyChance } from './formulas.js';
+import type { EffectSpec } from './types.js';
+import type { Rng } from './rng.js';
 
-export interface StatusInstance {
-  defId: string;
+/**
+ * 戰鬥中掛在單位身上的效果實體。
+ * 同名唯一：高級覆蓋低級、同級刷新時間、低級無效（但施放方照樣轉冷卻扣精神）。
+ */
+export interface ActiveEffect {
+  name: string;
   priority: number;
-  magnitude: number;
+  value: number;
   expiresAt: number;
-  /** dot 專用：下一次跳傷害的時間 */
+  /** 持續跳動型：下一次結算時間 */
   nextTickAt?: number;
+  /** 冰凍／暈眩：累積受到此量傷害即解除（最大生命 20%） */
+  breakPoolLeft?: number;
 }
 
+export type ApplyOutcome = 'applied' | 'replaced' | 'refreshed' | 'blocked' | 'resisted';
+
 export interface ApplyResult {
-  outcome: 'applied' | 'replaced' | 'blocked';
-  /** 抵抗後實際的持續秒數 */
+  outcome: ApplyOutcome;
+  /** 抗性結算後的實際持續秒數 */
   duration: number;
 }
 
-/**
- * 效果覆蓋規則：同名效果只會存在一份。
- * 新效果優先度 >= 既有者 → 取代；否則無法覆蓋（blocked）。
- * 意志縮短持續時間；感染類（resistedBy: vit）另由體質減低強度。
- */
-export function applyStatus(
-  statuses: StatusInstance[],
-  app: StatusApplication,
+/** 是否為有害效果（debuff）：持續時間吃意志縮短的判定依據 */
+export function isDebuff(name: string): boolean {
+  const def = EFFECT_BY_NAME.get(name);
+  if (!def) return false;
+  if (def.modifier) return def.modifier.direction === -1;
+  if (def.tick) return def.tick.direction === -1;
+  return def.kind === '狀態開關'; // 冰凍、暈眩、沉默都是有害的
+}
+
+export function applyEffect(
+  effects: ActiveEffect[],
+  spec: EffectSpec,
   now: number,
-  targetDerived: Derived,
+  target: { wil: number; vit: number; maxHp: number },
+  rng: Rng,
 ): ApplyResult {
-  const def = getStatus(app.statusId);
-  const duration = app.duration * (1 - targetDerived.statusResist);
-  let magnitude = app.magnitude;
-  if (def.resistedBy === 'vit') {
-    magnitude = magnitude * (1 - targetDerived.infectionResist);
+  const def = EFFECT_BY_NAME.get(spec.name);
+  if (!def) return { outcome: 'resisted', duration: 0 };
+
+  // 毒系：體質折減附加成功率（傷害本身不受體質影響）
+  if (def.tick?.poison && rng() >= poisonApplyChance(1, target.vit)) {
+    return { outcome: 'resisted', duration: 0 };
   }
 
-  const existingIndex = statuses.findIndex((s) => s.defId === app.statusId);
-  if (existingIndex >= 0 && statuses[existingIndex].priority > app.priority) {
-    return { outcome: 'blocked', duration: 0 };
+  const duration = isDebuff(spec.name)
+    ? debuffDuration(spec.duration, target.wil)
+    : spec.duration;
+
+  const existing = effects.find((e) => e.name === spec.name);
+  if (existing) {
+    if (existing.priority > spec.priority) return { outcome: 'blocked', duration: 0 };
+    const outcome: ApplyOutcome = existing.priority === spec.priority ? 'refreshed' : 'replaced';
+    existing.priority = spec.priority;
+    existing.value = spec.value;
+    existing.expiresAt = now + duration;
+    if (def.kind === '狀態開關' && (spec.name === '冰凍' || spec.name === '暈眩')) {
+      existing.breakPoolLeft = target.maxHp * 0.2;
+    }
+    return { outcome, duration };
   }
 
-  const instance: StatusInstance = {
-    defId: app.statusId,
-    priority: app.priority,
-    magnitude,
+  effects.push({
+    name: spec.name,
+    priority: spec.priority,
+    value: spec.value,
     expiresAt: now + duration,
-    nextTickAt: def.kind === 'dot' ? now + 1 : undefined,
-  };
-
-  if (existingIndex >= 0) {
-    statuses[existingIndex] = instance;
-    return { outcome: 'replaced', duration };
-  }
-  statuses.push(instance);
+    nextTickAt: def.kind === '持續跳動' ? now + 1 : undefined,
+    breakPoolLeft:
+      spec.name === '冰凍' || spec.name === '暈眩' ? target.maxHp * 0.2 : undefined,
+  });
   return { outcome: 'applied', duration };
 }
 
-export function purgeExpired(statuses: StatusInstance[], now: number): void {
-  for (let i = statuses.length - 1; i >= 0; i--) {
-    if (statuses[i].expiresAt <= now) statuses.splice(i, 1);
+export function purgeExpired(effects: ActiveEffect[], now: number): void {
+  for (let i = effects.length - 1; i >= 0; i--) {
+    if (effects[i].expiresAt <= now) effects.splice(i, 1);
   }
 }
 
-/** 冰緩等效果的出手間隔倍率 */
-export function slowMultiplier(statuses: StatusInstance[]): number {
-  return statuses
-    .filter((s) => getStatus(s.defId).kind === 'slow')
-    .reduce((mult, s) => mult * (1 + s.magnitude), 1);
+/**
+ * 統一修飾規則：實際值 ＝（基準 ＋ 固定值加總）×（1 ＋ 比例加總），最低 0。
+ */
+export function modifiedValue(base: number, effects: ActiveEffect[], target: ModifiableValue): number {
+  let flat = 0;
+  let pct = 0;
+  for (const active of effects) {
+    const def = EFFECT_BY_NAME.get(active.name);
+    if (!def?.modifier || def.modifier.target !== target) continue;
+    const signed = def.modifier.direction * active.value;
+    if (def.modifier.unit === '點') flat += signed;
+    else pct += signed / 100;
+  }
+  return Math.max(0, (base + flat) * (1 + pct));
 }
 
-/** 破甲等效果造成的防禦減算扣減 */
-export function defFlatReduction(statuses: StatusInstance[]): number {
-  return statuses
-    .filter((s) => getStatus(s.defId).kind === 'defDown')
-    .reduce((sum, s) => sum + s.magnitude, 0);
+/** 行動不能（冰凍／暈眩）中？回傳生效中的效果 */
+export function incapacitatedBy(effects: ActiveEffect[], now: number): ActiveEffect | null {
+  return (
+    effects.find(
+      (e) => (e.name === '冰凍' || e.name === '暈眩') && e.expiresAt > now,
+    ) ?? null
+  );
 }
 
-/** 昏迷結束的時間點；未昏迷回傳 null */
-export function stunnedUntil(statuses: StatusInstance[], now: number): number | null {
-  const stuns = statuses.filter((s) => getStatus(s.defId).kind === 'stun' && s.expiresAt > now);
-  if (stuns.length === 0) return null;
-  return Math.max(...stuns.map((s) => s.expiresAt));
+export function isSilenced(effects: ActiveEffect[], now: number): boolean {
+  return effects.some((e) => e.name === '沉默' && e.expiresAt > now);
+}
+
+/**
+ * 冰凍／暈眩的破除：受到傷害就消耗破除池，耗盡即解除。
+ * 回傳被破除的效果名稱（沒有則 null）。
+ */
+export function absorbBreakDamage(effects: ActiveEffect[], damage: number): string | null {
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const effect = effects[i];
+    if (effect.breakPoolLeft === undefined) continue;
+    effect.breakPoolLeft -= damage;
+    if (effect.breakPoolLeft <= 0) {
+      effects.splice(i, 1);
+      return effect.name;
+    }
+  }
+  return null;
 }

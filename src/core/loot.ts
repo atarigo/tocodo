@@ -2,6 +2,7 @@ import type { Rank } from './types.js';
 import { GEAR } from '../data/gear.js';
 import { SKILLS } from '../data/skills.js';
 import { WEAPONS } from '../data/weapons.js';
+import { WORLD_EFFECTS } from '../data/worldEffects.js';
 import { floorReward } from '../game/economy.js';
 import { isBossFloor } from './dungeon.js';
 import { pick, type Rng } from './rng.js';
@@ -33,9 +34,9 @@ export function rollFloorDrops(floor: number, character: CharacterState, rng: Rn
   const messages: string[] = [];
   const boss = isBossFloor(floor);
 
-  const reward = floorReward(floor, boss);
+  const reward = Math.round(floorReward(floor, boss) * WORLD_EFFECTS.遺產祝福);
   character.currency += reward;
-  messages.push(`獲得 ${reward} 貨幣。`);
+  messages.push(`獲得 ${reward} 貨幣`);
 
   if (boss || rng() < ITEM_DROP_RATE) {
     const rank = rollRank(floor, rng);
@@ -47,7 +48,7 @@ export function rollFloorDrops(floor: number, character: CharacterState, rng: Rn
     if (candidates.length > 0) {
       const item = pick(rng, candidates);
       character.inventory.push(item.id);
-      messages.push(`獲得【${item.name}】（${item.rank} 級）！`);
+      messages.push(`獲得【${item.name}】（${item.rank} 級）`);
     }
   }
 
@@ -59,7 +60,7 @@ export function rollFloorDrops(floor: number, character: CharacterState, rng: Rn
     if (candidates.length > 0) {
       const skill = pick(rng, candidates);
       character.knownSkills.push(skill.id);
-      messages.push(`習得技能【${skill.name}】（${skill.rank} 級）！`);
+      messages.push(`習得【${skill.name}】（${skill.rank} 級）`);
     }
   }
 

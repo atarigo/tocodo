@@ -13,8 +13,8 @@
  */
 export type EffectKind = '數值修飾' | '持續跳動' | '狀態開關';
 
-/** 數值修飾型可改的目標（之後隨管線擴充） */
-export type ModifiableValue = '護甲值總和' | '減傷率' | '詠唱時間' | '攻速';
+/** 數值修飾型可改的目標（之後隨管線擴充）；攻速與詠唱速度是「速度倍率」，越高越快 */
+export type ModifiableValue = '護甲值總和' | '減傷率' | '詠唱速度' | '攻速';
 
 export interface EffectDef {
   name: string;
@@ -42,8 +42,8 @@ export const EFFECTS: readonly EffectDef[] = [
   { name: '佑甲', kind: '數值修飾', modifier: { target: '護甲值總和', unit: '點', direction: 1 } },
   { name: '蝕甲', kind: '數值修飾', modifier: { target: '減傷率', unit: '比例', direction: -1 } },
   { name: '耀甲', kind: '數值修飾', modifier: { target: '減傷率', unit: '比例', direction: 1 } },
-  { name: '恍神', kind: '數值修飾', modifier: { target: '詠唱時間', unit: '比例', direction: -1 }, notes: '詠唱變慢' },
-  { name: '專注', kind: '數值修飾', modifier: { target: '詠唱時間', unit: '比例', direction: 1 }, notes: '詠唱變快' },
+  { name: '恍神', kind: '數值修飾', modifier: { target: '詠唱速度', unit: '比例', direction: -1 }, notes: '詠唱變慢' },
+  { name: '專注', kind: '數值修飾', modifier: { target: '詠唱速度', unit: '比例', direction: 1 }, notes: '詠唱變快' },
   { name: '減速', kind: '數值修飾', modifier: { target: '攻速', unit: '比例', direction: -1 } },
   { name: '加速', kind: '數值修飾', modifier: { target: '攻速', unit: '比例', direction: 1 } },
   { name: '冰緩', kind: '數值修飾', modifier: { target: '攻速', unit: '比例', direction: -1 }, notes: '＝減速的冰系名稱（尚無移動設計）' },

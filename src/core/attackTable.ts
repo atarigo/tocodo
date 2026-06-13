@@ -53,6 +53,8 @@ export interface AttackTableContext {
   canBeParried?: boolean;
   /** 此次攻擊可否被格檔（盾牌連火球都擋得住）——由攻擊宣告 */
   canBeBlocked?: boolean;
+  /** 守方行動不能（冰凍／暈眩）：不能閃避、招架、格檔；躲避（幸運）仍在 */
+  defenderIncapacitated?: boolean;
 }
 
 /** 頭目碾壓的統一預設值（各頭目可自行覆寫） */
@@ -103,11 +105,12 @@ export function critWidth(luk: number): number {
 }
 
 export function buildAttackTable(ctx: AttackTableContext): TableSegment[] {
+  const incapacitated = ctx.defenderIncapacitated ?? false;
   // 依優先序填入；空間不夠時後面的段被擠掉，普通命中拿剩餘空間
   const queued: TableSegment[] = [
     {
       outcome: '閃避',
-      width: dodgeWidth(ctx.defender.agi, ctx.attacker.dex),
+      width: incapacitated ? 0 : dodgeWidth(ctx.defender.agi, ctx.attacker.dex),
     },
     {
       outcome: '躲避',
@@ -115,11 +118,13 @@ export function buildAttackTable(ctx: AttackTableContext): TableSegment[] {
     },
     {
       outcome: '招架',
-      width: (ctx.canBeParried ?? true) ? Math.max(0, ctx.defenderParryRate) : 0,
+      width:
+        !incapacitated && (ctx.canBeParried ?? true) ? Math.max(0, ctx.defenderParryRate) : 0,
     },
     {
       outcome: '格檔',
-      width: (ctx.canBeBlocked ?? true) ? Math.max(0, ctx.defenderBlockRate) : 0,
+      width:
+        !incapacitated && (ctx.canBeBlocked ?? true) ? Math.max(0, ctx.defenderBlockRate) : 0,
     },
     // 攻方特殊結果：防禦段堆高時，普通命中先歸零 → 碾壓被擠出 → 最後才是暴擊
     {
@@ -183,13 +188,16 @@ export function resolveDamage(
   defense: DefenseValues,
   /** 攻方增傷效果（技能倍率、增傷 buff 比例加總後），1 ＝ 無增傷 */
   damageBonus = 1,
+  /** 穿透：無視護甲值總和（必定破防），仍吃減傷率與折減 */
+  pierce = false,
 ): DamageResult {
   if (outcome === '閃避' || outcome === '躲避') return { damage: 0, brokeDefense: false };
   let incoming = base * damageBonus;
   if (outcome === '暴擊') incoming *= CRIT_MULTIPLIER;
   if (outcome === '碾壓') incoming *= CRUSH_MULTIPLIER;
-  if (incoming <= defense.armor) return { damage: 1, brokeDefense: false };
-  let damage = (incoming - defense.armor) * (1 - defense.reductionRate);
+  const armor = pierce ? 0 : defense.armor;
+  if (incoming <= armor) return { damage: 1, brokeDefense: false };
+  let damage = (incoming - armor) * (1 - defense.reductionRate);
   if (outcome === '招架') damage *= 1 - PARRY_DAMAGE_REDUCTION;
   if (outcome === '格檔') damage *= 1 - BLOCK_DAMAGE_REDUCTION;
   return { damage: Math.max(1, Math.round(damage)), brokeDefense: true };
