@@ -1,10 +1,16 @@
 import Matter from 'matter-js';
-import type { Combatant, Impact, InputState, Projectile, Strike, Vec2 } from './types.js';
+import { buildAttackTable, resolveDamage, rollOutcome, type AttackOutcome } from './attackTable.js';
+import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
+import { createRng, type Rng } from './rng.js';
+import type { Attributes, CombatLogEntry, Combatant, DamageText, Impact, InputState, Projectile, Strike, Vec2 } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
 const PLAYER_ID = 1;
 const MATTER_TICKS_PER_SECOND = 60;
+const BASE_ATTACK_INTERVAL = 0.82;
+const BASIC_DAMAGE: [number, number] = [4, 8];
+const BASIC_BALANCE = 0.55;
 
 function length(v: Vec2): number {
   return Math.hypot(v.x, v.y);
@@ -28,8 +34,23 @@ function angleDelta(a: number, b: number): number {
   return Math.abs(((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
 }
 
-function makeCombatant(params: Omit<Combatant, 'cooldown' | 'flash' | 'bodyId'>): Combatant {
-  return { ...params, cooldown: 0, flash: 0, bodyId: null };
+function makeCombatant(
+  params: Omit<Combatant, 'cooldown' | 'flash' | 'bodyId' | 'hp' | 'maxHp' | 'mp' | 'maxMp'>,
+): Combatant {
+  const hp = maxHp(params.attrs.vit);
+  const mp = maxMp(params.attrs.wil);
+  return { ...params, hp, maxHp: hp, mp, maxMp: mp, cooldown: 0, flash: 0, bodyId: null };
+}
+
+function baseAttrs(extra: Partial<Attributes> = {}): Attributes {
+  return {
+    str: extra.str ?? 10,
+    vit: extra.vit ?? 10,
+    agi: extra.agi ?? 10,
+    dex: extra.dex ?? 10,
+    wil: extra.wil ?? 10,
+    luk: extra.luk ?? 10,
+  };
 }
 
 export class RealtimeCombatEngine {
@@ -38,16 +59,24 @@ export class RealtimeCombatEngine {
   readonly projectiles: Projectile[] = [];
   readonly strikes: Strike[] = [];
   readonly impacts: Impact[] = [];
+  readonly damageTexts: DamageText[] = [];
 
   private readonly matter = Matter.Engine.create({ gravity: { x: 0, y: 0 } });
   private readonly bodies = new Map<number, Matter.Body>();
+  private readonly rng: Rng;
+  private readonly onLog?: (entry: CombatLogEntry) => void;
   private nextEffectId = 1;
   private nextProjectileId = 1;
+  private nextLogId = 1;
 
-  constructor() {
+  constructor(opts: { seed?: number; onLog?: (entry: CombatLogEntry) => void } = {}) {
+    this.rng = createRng(opts.seed ?? Date.now());
+    this.onLog = opts.onLog;
     this.player = makeCombatant({
       id: PLAYER_ID,
       kind: 'player',
+      name: '玩家',
+      attrs: baseAttrs(),
       radius: 17,
       color: 0x5b8def,
       position: { x: 400, y: 310 },
@@ -55,13 +84,19 @@ export class RealtimeCombatEngine {
       speed: 230,
       attackRange: 88,
       attackArc: Math.PI / 2,
-      attackCooldown: 0.42,
+      attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, 10),
+      armor: 0,
+      reductionRate: 0,
+      parryRate: 0,
+      blockRate: 0,
     });
 
     this.enemies = [
       makeCombatant({
         id: 2,
         kind: 'meleeEnemy',
+        name: '赤色斥候',
+        attrs: baseAttrs({ str: 8, vit: 8, agi: 8, dex: 8, wil: 6, luk: 6 }),
         radius: 16,
         color: 0xe0564b,
         position: { x: 190, y: 180 },
@@ -69,11 +104,17 @@ export class RealtimeCombatEngine {
         speed: 86,
         attackRange: 70,
         attackArc: Math.PI / 2,
-        attackCooldown: 1.05,
+        attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, 8),
+        armor: 0,
+        reductionRate: 0,
+        parryRate: 0,
+        blockRate: 0,
       }),
       makeCombatant({
         id: 3,
         kind: 'meleeEnemy',
+        name: '橙色守衛',
+        attrs: baseAttrs({ str: 11, vit: 12, agi: 6, dex: 8, wil: 8, luk: 5 }),
         radius: 16,
         color: 0xe0954b,
         position: { x: 610, y: 430 },
@@ -81,11 +122,17 @@ export class RealtimeCombatEngine {
         speed: 78,
         attackRange: 70,
         attackArc: Math.PI / 2,
-        attackCooldown: 1.2,
+        attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, 6),
+        armor: 1,
+        reductionRate: 0,
+        parryRate: 0,
+        blockRate: 0,
       }),
       makeCombatant({
         id: 4,
         kind: 'rangedEnemy',
+        name: '紫色射手',
+        attrs: baseAttrs({ str: 7, vit: 7, agi: 10, dex: 12, wil: 10, luk: 8 }),
         radius: 14,
         color: 0xb04bd9,
         position: { x: 640, y: 150 },
@@ -93,7 +140,11 @@ export class RealtimeCombatEngine {
         speed: 62,
         attackRange: 245,
         attackArc: Math.PI / 5,
-        attackCooldown: 1.65,
+        attackCooldown: attackInterval(1.25, 10),
+        armor: 0,
+        reductionRate: 0,
+        parryRate: 0,
+        blockRate: 0,
       }),
     ];
 
@@ -150,11 +201,15 @@ export class RealtimeCombatEngine {
     this.setVelocity(this.player, { x: movement.x * this.player.speed, y: movement.y * this.player.speed });
 
     if (input.aim.x !== 0 || input.aim.y !== 0) this.player.facing = Math.atan2(input.aim.y, input.aim.x);
-    if (input.attacking && this.player.cooldown === 0) this.swing(this.player, this.enemies, 'slash');
+    if (input.attacking && this.player.cooldown === 0 && this.player.hp > 0) this.swing(this.player, this.enemies, 'slash');
   }
 
   private updateEnemies(): void {
     for (const enemy of this.enemies) {
+      if (enemy.hp <= 0 || this.player.hp <= 0) {
+        this.setVelocity(enemy, { x: 0, y: 0 });
+        continue;
+      }
       const toPlayer = {
         x: this.player.position.x - enemy.position.x,
         y: this.player.position.y - enemy.position.y,
@@ -205,11 +260,16 @@ export class RealtimeCombatEngine {
   private swing(attacker: Combatant, targets: Combatant[], style: Strike['style']): void {
     let hit = false;
     for (const target of targets) {
+      if (target.hp <= 0) continue;
       const d = distance(attacker.position, target.position) - attacker.radius - target.radius;
       const targetAngle = angleTo(attacker.position, target.position);
       if (d <= attacker.attackRange && angleDelta(attacker.facing, targetAngle) <= attacker.attackArc / 2) {
-        target.flash = 0.22;
-        this.addImpact(target.position);
+        const damage = this.resolveBasicAttack(attacker, target);
+        if (damage > 0) {
+          target.flash = 0.22;
+          this.addImpact(target.position);
+          this.addDamageText(target.position, damage);
+        }
         hit = true;
       }
     }
@@ -236,6 +296,7 @@ export class RealtimeCombatEngine {
     attacker.flash = 0.08;
     this.projectiles.push({
       id: this.nextProjectileId++,
+      ownerId: attacker.id,
       position: {
         x: attacker.position.x + dir.x * (attacker.radius + 8),
         y: attacker.position.y + dir.y * (attacker.radius + 8),
@@ -265,8 +326,13 @@ export class RealtimeCombatEngine {
       }
 
       if (distance(projectile.position, this.player.position) <= projectile.radius + this.player.radius) {
-        this.player.flash = 0.25;
-        this.addImpact(projectile.position);
+        const attacker = this.enemies.find((enemy) => enemy.id === projectile.ownerId);
+        const damage = attacker ? this.resolveBasicAttack(attacker, this.player) : 0;
+        if (damage > 0) {
+          this.player.flash = 0.25;
+          this.addImpact(projectile.position);
+          this.addDamageText(this.player.position, damage);
+        }
         this.projectiles.splice(i, 1);
       }
     }
@@ -281,11 +347,59 @@ export class RealtimeCombatEngine {
       this.impacts[i].ttl -= dt;
       if (this.impacts[i].ttl <= 0) this.impacts.splice(i, 1);
     }
+    for (let i = this.damageTexts.length - 1; i >= 0; i -= 1) {
+      this.damageTexts[i].ttl -= dt;
+      this.damageTexts[i].position.y -= 28 * dt;
+      if (this.damageTexts[i].ttl <= 0) this.damageTexts.splice(i, 1);
+    }
   }
 
   private addImpact(position: Vec2): void {
     const last = this.impacts[this.impacts.length - 1];
     if (last && distance(last.position, position) < 8 && last.ttl > 0.08) return;
     this.impacts.push({ id: this.nextEffectId++, position: { ...position }, ttl: 0.18 });
+  }
+
+  private addDamageText(position: Vec2, damage: number): void {
+    this.damageTexts.push({
+      id: this.nextEffectId++,
+      position: { x: position.x, y: position.y - 28 },
+      text: String(damage),
+      ttl: 0.72,
+    });
+  }
+
+  private resolveBasicAttack(attacker: Combatant, target: Combatant): number {
+    const table = buildAttackTable({
+      attacker: attacker.attrs,
+      defender: target.attrs,
+      defenderParryRate: target.parryRate,
+      defenderBlockRate: target.blockRate,
+      attackerCanCrit: true,
+      attackerCrushRate: 0,
+      canBeParried: true,
+      canBeBlocked: true,
+    });
+    const outcome = rollOutcome(table, this.rng);
+    const balance = effectiveBalance(BASIC_BALANCE, attacker.attrs.dex);
+    const base = balanceRoll(this.rng, BASIC_DAMAGE[0], BASIC_DAMAGE[1], balance) + attacker.attrs.str;
+    const result = resolveDamage(outcome, base, { armor: target.armor, reductionRate: target.reductionRate });
+    const damage = result.damage;
+
+    target.hp = Math.max(0, target.hp - damage);
+    this.pushAttackLog(attacker, target, outcome, damage);
+    return damage;
+  }
+
+  private pushAttackLog(attacker: Combatant, target: Combatant, outcome: AttackOutcome, damage: number): void {
+    this.onLog?.({
+      id: this.nextLogId++,
+      actorSide: attacker.kind === 'player' ? 'player' : 'enemy',
+      actorName: attacker.name,
+      targetName: target.name,
+      action: '普攻',
+      damage,
+      outcome,
+    });
   }
 }

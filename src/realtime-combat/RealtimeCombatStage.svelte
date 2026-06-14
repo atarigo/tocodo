@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Application, Container, Graphics } from 'pixi.js';
+  import { Application, Container, Graphics, Text } from 'pixi.js';
   import { RealtimeCombatEngine } from './engine.js';
-  import type { Combatant, InputState, Strike, Vec2 } from './types.js';
+  import type { CombatLogEntry, Combatant, InputState, Strike, Vec2 } from './types.js';
   import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
+
+  let { onLog }: { onLog?: (entry: CombatLogEntry) => void } = $props();
 
   let host: HTMLDivElement;
 
@@ -42,7 +44,13 @@
   function drawCombatant(layer: Container, combatant: Combatant): void {
     const g = new Graphics();
     const flashAlpha = combatant.flash > 0 ? 0.35 + Math.sin(combatant.flash * 80) * 0.25 : 0;
+    const hpRatio = combatant.maxHp > 0 ? combatant.hp / combatant.maxHp : 0;
+    const mpRatio = combatant.maxMp > 0 ? combatant.mp / combatant.maxMp : 0;
 
+    g.roundRect(-34, -50, 68, 5, 2).fill({ color: 0x0d0f14, alpha: 0.9 });
+    g.roundRect(-34, -50, 68 * hpRatio, 5, 2).fill({ color: 0xe0564b });
+    g.roundRect(-34, -42, 68, 4, 2).fill({ color: 0x0d0f14, alpha: 0.9 });
+    g.roundRect(-34, -42, 68 * mpRatio, 4, 2).fill({ color: 0x5b8def });
     g.circle(0, 0, combatant.radius + 4).fill({ color: 0xffffff, alpha: flashAlpha });
     g.circle(0, 0, combatant.radius).fill({ color: combatant.flash > 0 ? 0xffffff : combatant.color });
     g.circle(0, 0, combatant.radius).stroke({ color: 0x11131a, width: 3, alpha: 0.8 });
@@ -51,6 +59,18 @@
     g.stroke({ color: 0xf4f6ff, width: 3, alpha: 0.9 });
     g.position.set(combatant.position.x, combatant.position.y);
     layer.addChild(g);
+
+    const label = new Text({
+      text: combatant.name,
+      style: {
+        fill: 0xd8dae3,
+        fontFamily: 'Helvetica Neue, PingFang TC, Microsoft JhengHei, sans-serif',
+        fontSize: 11,
+      },
+    });
+    label.anchor.set(0.5, 1);
+    label.position.set(combatant.position.x, combatant.position.y - 54);
+    layer.addChild(label);
   }
 
   function drawStrike(layer: Container, strike: Strike): void {
@@ -103,6 +123,22 @@
       g.position.set(projectile.position.x, projectile.position.y);
       projectilesLayer.addChild(g);
     }
+    for (const damageText of engine.damageTexts) {
+      const label = new Text({
+        text: damageText.text,
+        style: {
+          fill: 0xff4d42,
+          fontFamily: 'Helvetica Neue, PingFang TC, Microsoft JhengHei, sans-serif',
+          fontSize: 20,
+          fontWeight: '700',
+          stroke: { color: 0x16171d, width: 4 },
+        },
+      });
+      label.anchor.set(0.5, 0.5);
+      label.alpha = Math.max(0, Math.min(1, damageText.ttl / 0.35));
+      label.position.set(damageText.position.x, damageText.position.y);
+      effectsLayer.addChild(label);
+    }
     drawCombatant(entitiesLayer, engine.player);
     for (const enemy of engine.enemies) drawCombatant(entitiesLayer, enemy);
   }
@@ -118,7 +154,7 @@
 
   onMount(() => {
     let destroyed = false;
-    const localEngine = new RealtimeCombatEngine();
+    const localEngine = new RealtimeCombatEngine({ onLog });
     engine = localEngine;
 
     const onKeyDown = (event: KeyboardEvent) => {
