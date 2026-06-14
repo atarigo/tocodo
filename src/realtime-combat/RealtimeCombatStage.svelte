@@ -316,6 +316,7 @@
         onPlayerStatuses?.(localEngine.statusEffects.filter((effect) => effect.targetId === localEngine.player.id));
         onPlayerActionState?.({
           skillCooldowns: localEngine.player.skillSlots.map((skillId) => (skillId ? (localEngine.player.skillCooldowns[skillId] ?? 0) : 0)),
+          skillFailureReasons: localEngine.player.skillSlots.map((_, index) => localEngine.playerSkillFailureReason(index)),
           itemUsed: [...localEngine.player.itemUsed],
         });
         render();

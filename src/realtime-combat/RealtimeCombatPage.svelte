@@ -10,6 +10,7 @@
     CombatHandSide,
     DifficultyRank,
     EquipmentLoadout,
+    SkillFailureReason,
     StatusEffect,
   } from './types.js';
   import AttributePanel from './AttributePanel.svelte';
@@ -29,7 +30,11 @@
   });
   let battleSetup = $state<BattleSetup | null>(null);
   let playerStatuses = $state<StatusEffect[]>([]);
-  let playerActionState = $state<ActionBarState>({ skillCooldowns: [0, 0, 0, 0, 0], itemUsed: [false, false] });
+  let playerActionState = $state<ActionBarState>({
+    skillCooldowns: [0, 0, 0, 0, 0],
+    skillFailureReasons: [null, null, null, null, null],
+    itemUsed: [false, false],
+  });
   let sessionId = $state(0);
   let started = $state(false);
   let battleResult = $state<BattleResult | null>(null);
@@ -44,7 +49,11 @@
     const nextSessionId = sessionId + 1;
     events = [];
     playerStatuses = [];
-    playerActionState = { skillCooldowns: [0, 0, 0, 0, 0], itemUsed: [false, false] };
+    playerActionState = {
+      skillCooldowns: [0, 0, 0, 0, 0],
+      skillFailureReasons: [null, null, null, null, null],
+      itemUsed: [false, false],
+    };
     battleResult = null;
     battleSetup = createRandomBattleSetup({
       playerAttrs,
@@ -73,6 +82,16 @@
     return '抵抗';
   }
 
+  function skillFailureText(reason: SkillFailureReason): string {
+    if (reason === 'cooldown') return '冷卻中';
+    if (reason === 'notEnoughMp') return 'MP不足';
+    if (reason === 'noTarget') return '沒有有效目標';
+    if (reason === 'tooClose') return '距離太近';
+    if (reason === 'tooFar') return '距離太遠';
+    if (reason === 'notInMeleeRange') return '不在近戰範圍';
+    return '被障礙物阻擋';
+  }
+
   function eventText(event: CombatEvent): string {
     switch (event.kind) {
       case 'damage':
@@ -83,6 +102,8 @@
         return `${event.target.name} ${statusActionText(event.statusAction)} ${event.statusName}`;
       case 'resource':
         return `${event.source.name} 使用 ${event.action?.name ?? '動作'} 恢復 ${event.target.name} ${event.amount} 點 ${event.resource.toUpperCase()}`;
+      case 'actionFail':
+        return `${event.source.name} 使用 ${event.action?.name ?? '動作'} 失敗 [${skillFailureText(event.reason)}]`;
       case 'death':
         return `${event.target.name} 倒下`;
       case 'battleEnd':
@@ -94,6 +115,10 @@
 
   function skillCooldown(slotIndex: number): number {
     return playerActionState.skillCooldowns[slotIndex] ?? 0;
+  }
+
+  function skillFailureReason(slotIndex: number): SkillFailureReason | null {
+    return playerActionState.skillFailureReasons[slotIndex] ?? null;
   }
 
   function itemWasUsed(slotIndex: number): boolean {
@@ -147,7 +172,11 @@
       <div class="quickbar">
         <div class="quickbar-row skills">
           {#each Array(5) as _, index}
-            <div class="quick-slot" class:cooling={skillCooldown(index) > 0}>
+            <div
+              class="quick-slot"
+              class:cooling={skillCooldown(index) > 0}
+              class:insufficient={skillFailureReason(index) === 'notEnoughMp' && skillCooldown(index) <= 0}
+            >
               {#if actionLoadout.skillSlots[index]}
                 <strong>{skillById(actionLoadout.skillSlots[index]).name}</strong>
                 {#if skillCooldown(index) > 0}
@@ -313,6 +342,12 @@
     border-color: rgba(142, 147, 160, 0.42);
     background: rgba(48, 51, 59, 0.86);
     filter: grayscale(0.9);
+  }
+
+  .quick-slot.insufficient {
+    border-color: rgba(91, 141, 239, 0.28);
+    background: rgba(18, 27, 48, 0.86);
+    color: #9fb7ef;
   }
 
   .quick-slot.used {

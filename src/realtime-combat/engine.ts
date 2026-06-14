@@ -9,7 +9,7 @@ import { itemById } from './itemCatalog.js';
 import { createRng, type Rng } from './rng.js';
 import { skillById, type SkillDefinition } from './skillCatalog.js';
 import { statusById } from './statusCatalog.js';
-import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, ItemId, Projectile, SkillId, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
+import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, ItemId, Projectile, SkillFailureReason, SkillId, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
@@ -23,6 +23,14 @@ const BASIC_ARC = Math.PI / 2;
 const DEFAULT_ALERT_RANGE = 230;
 const DEFAULT_LEASH_RANGE = 420;
 const RETURN_DISTANCE = 8;
+const NPC_RESET_REGEN_INTERVAL = 1;
+const NPC_RESET_REGEN_DURATION = 2;
+const NPC_RESET_REGEN_RATIO = 0.5;
+const PLAYER_COMBAT_TIMEOUT = 5;
+const PLAYER_IDLE_HP_REGEN_INTERVAL = 1;
+const PLAYER_IDLE_HP_REGEN_RATIO = 0.01;
+const PLAYER_IDLE_MP_REGEN_INTERVAL = 30;
+const PLAYER_IDLE_MP_REGEN_RATIO = 0.002;
 
 function length(v: Vec2): number {
   return Math.hypot(v.x, v.y);
@@ -204,6 +212,10 @@ export class RealtimeCombatEngine {
   private nextProjectileId = 1;
   private nextLogId = 1;
   private result: BattleResult | null = null;
+  private playerCombatTimer = 0;
+  private playerIdleHpRegenTimer = 0;
+  private playerIdleMpRegenTimer = 0;
+  private readonly npcResetRegenTimers = new Map<number, number>();
 
   constructor(opts: { seed?: number; onEvent?: (event: CombatEvent) => void; setup?: BattleSetup; enemyAttrsOverride?: Attributes } = {}) {
     this.rng = createRng(opts.seed ?? Date.now());
@@ -234,8 +246,8 @@ export class RealtimeCombatEngine {
       skillCooldowns: {},
       itemSlots: [...setup.player.actionLoadout.itemSlots],
       itemUsed: setup.player.actionLoadout.itemSlots.map(() => false),
-      aiState: 'combat',
-      defaultAiState: 'combat',
+      aiState: 'guard',
+      defaultAiState: 'guard',
       alertRange: 0,
       leashRange: 0,
     });
@@ -261,7 +273,25 @@ export class RealtimeCombatEngine {
     if (!skillId || this.result || this.player.hp <= 0) return;
     const skill = skillById(skillId);
     const target = skill.targetType === 'self' ? this.player : this.targetFor(this.player);
-    if (target) this.useSkill(this.player, target, skill);
+    if (!target) {
+      this.pushActionFailEvent(this.player, skill.name, 'noTarget');
+      return;
+    }
+    const failureReason = this.skillFailureReason(this.player, target, skill);
+    if (failureReason) {
+      this.pushActionFailEvent(this.player, skill.name, failureReason);
+      return;
+    }
+    this.useSkill(this.player, target, skill);
+  }
+
+  playerSkillFailureReason(slotIndex: number): SkillFailureReason | null {
+    const skillId = this.player.skillSlots[slotIndex];
+    if (!skillId || this.result || this.player.hp <= 0) return null;
+    const skill = skillById(skillId);
+    const target = skill.targetType === 'self' ? this.player : this.targetFor(this.player);
+    if (!target) return 'noTarget';
+    return this.skillFailureReason(this.player, target, skill);
   }
 
   usePlayerItemSlot(slotIndex: number): void {
@@ -284,6 +314,8 @@ export class RealtimeCombatEngine {
     if (!this.result) this.tickProjectiles(safeDt);
     else this.projectiles.length = 0;
     if (!this.result) this.tickStatusEffects(safeDt);
+    if (!this.result) this.tickPlayerCombatState(safeDt);
+    if (!this.result) this.tickHiddenPassiveRegen(safeDt);
     this.tickEffects(safeDt);
     this.checkBattleEnd();
   }
@@ -337,7 +369,10 @@ export class RealtimeCombatEngine {
     this.setVelocity(this.player, { x: movement.x * this.player.speed, y: movement.y * this.player.speed });
 
     if (input.aim.x !== 0 || input.aim.y !== 0) this.player.facing = Math.atan2(input.aim.y, input.aim.x);
-    if (input.attacking && this.player.hp > 0) this.performReadyAttacks(this.player, this.attackableTargetsFor(this.player));
+    if (input.attacking && this.player.hp > 0) {
+      this.markPlayerInCombat();
+      this.performReadyAttacks(this.player, this.attackableTargetsFor(this.player));
+    }
   }
 
   private updateNpcCombatants(): void {
@@ -366,6 +401,7 @@ export class RealtimeCombatEngine {
     const target = this.alertTargetFor(actor);
     if (target) {
       actor.aiState = 'combat';
+      this.clearNpcResetRegen(actor);
       actor.facing = angleTo(actor.position, target.position);
     }
   }
@@ -380,6 +416,7 @@ export class RealtimeCombatEngine {
     if (d <= RETURN_DISTANCE) {
       this.moveBodyTo(actor, actor.homePosition);
       actor.aiState = actor.defaultAiState === 'patrol' ? 'patrol' : 'guard';
+      this.startNpcResetRegen(actor);
       this.setVelocity(actor, { x: 0, y: 0 });
       return;
     }
@@ -391,12 +428,14 @@ export class RealtimeCombatEngine {
   private updateCombatState(actor: Combatant): void {
     if (distance(actor.position, actor.homePosition) > actor.leashRange) {
       actor.aiState = 'returning';
+      this.clearNpcResetRegen(actor);
       return;
     }
 
     const target = this.targetFor(actor);
     if (!target) {
       actor.aiState = 'returning';
+      this.clearNpcResetRegen(actor);
       return;
     }
 
@@ -618,26 +657,29 @@ export class RealtimeCombatEngine {
   private tryUseSkill(attacker: Combatant, target: Combatant, distanceToTarget: number): boolean {
     for (const skillId of attacker.skills) {
       const skill = skillById(skillId);
-      if (!this.canUseSkill(attacker, target, skill, distanceToTarget)) continue;
+      if (this.skillFailureReason(attacker, target, skill, distanceToTarget)) continue;
       this.useSkill(attacker, target, skill);
       return true;
     }
     return false;
   }
 
-  private canUseSkill(attacker: Combatant, target: Combatant, skill: SkillDefinition, distanceToTarget = distance(attacker.position, target.position)): boolean {
-    if ((attacker.skillCooldowns[skill.id] ?? 0) > 0 || attacker.mp < (skill.mpCost ?? 0)) return false;
-    if (skill.targetType === 'self' && attacker.id !== target.id) return false;
-    if (skill.targetType === 'enemy' && !this.canAttack(attacker, target)) return false;
-    if (distanceToTarget < (skill.minRange ?? 0) || distanceToTarget > (skill.maxRange ?? Infinity)) return false;
+  private skillFailureReason(attacker: Combatant, target: Combatant, skill: SkillDefinition, distanceToTarget = distance(attacker.position, target.position)): SkillFailureReason | null {
+    if ((attacker.skillCooldowns[skill.id] ?? 0) > 0) return 'cooldown';
+    if (attacker.mp < (skill.mpCost ?? 0)) return 'notEnoughMp';
+    if (skill.targetType === 'self' && attacker.id !== target.id) return 'noTarget';
+    if (skill.targetType === 'enemy' && !this.canAttack(attacker, target)) return 'noTarget';
+    if (distanceToTarget < (skill.minRange ?? 0)) return 'tooClose';
+    if (distanceToTarget > (skill.maxRange ?? Infinity)) return 'tooFar';
     const meleeHand = this.meleeHandFor(attacker);
-    if (skill.requiresMeleeRange && (!meleeHand || !targetInMeleeRange(attacker, target, meleeHand))) return false;
-    if (skill.requiresLineOfSight && !this.hasLineOfSight(attacker.position, target.position)) return false;
-    return true;
+    if (skill.requiresMeleeRange && (!meleeHand || !targetInMeleeRange(attacker, target, meleeHand))) return 'notInMeleeRange';
+    if (skill.requiresLineOfSight && !this.hasLineOfSight(attacker.position, target.position)) return 'blocked';
+    return null;
   }
 
   private useSkill(attacker: Combatant, target: Combatant, skill: SkillDefinition): void {
-    if (!this.canUseSkill(attacker, target, skill)) return;
+    if (this.skillFailureReason(attacker, target, skill)) return;
+    if (attacker.faction === 'player') this.markPlayerInCombat();
     attacker.mp = Math.max(0, attacker.mp - (skill.mpCost ?? 0));
     attacker.skillCooldowns[skill.id] = skill.cooldown;
 
@@ -738,7 +780,12 @@ export class RealtimeCombatEngine {
         effect.tickTimer += effect.tickInterval;
         target.flash = 0.18;
         if (effect.effectType === 'damage') {
+          if (source.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
           target.hp = Math.max(0, target.hp - effect.amountPerTick);
+          if (target.hp > 0 && target.faction !== 'player' && this.canAttack(target, source)) {
+            target.aiState = 'combat';
+            this.clearNpcResetRegen(target);
+          }
           this.addDamageText(target.position, effect.amountPerTick, { color: 0xff5f5a, yOffset: -42, prefix: '-' });
           this.pushDamageEvent(source, target, '命中', effect.amountPerTick, undefined, effect.name);
           if (target.hp <= 0) this.pushDeathEvent(source, target);
@@ -757,11 +804,94 @@ export class RealtimeCombatEngine {
     }
   }
 
+  private tickHiddenPassiveRegen(dt: number): void {
+    this.tickNpcResetRegen(dt);
+    this.tickPlayerIdleRegen(dt);
+  }
+
+  private tickNpcResetRegen(dt: number): void {
+    for (const actor of this.npcCombatants()) {
+      if (actor.hp <= 0) {
+        this.clearNpcResetRegen(actor);
+        continue;
+      }
+      const elapsed = this.npcResetRegenTimers.get(actor.id);
+      if (elapsed === undefined) continue;
+      if (actor.aiState !== 'guard' && actor.aiState !== 'patrol') {
+        this.clearNpcResetRegen(actor);
+        continue;
+      }
+
+      const nextElapsed = elapsed + dt;
+      const previousTicks = Math.floor(elapsed / NPC_RESET_REGEN_INTERVAL);
+      const nextTicks = Math.floor(Math.min(nextElapsed, NPC_RESET_REGEN_DURATION) / NPC_RESET_REGEN_INTERVAL);
+      const ticks = Math.max(0, nextTicks - previousTicks);
+      if (ticks > 0) this.restoreHiddenResource(actor, actor.maxHp * NPC_RESET_REGEN_RATIO * ticks, actor.maxMp * NPC_RESET_REGEN_RATIO * ticks);
+
+      if (nextElapsed >= NPC_RESET_REGEN_DURATION) {
+        this.clearNpcResetRegen(actor);
+      } else {
+        this.npcResetRegenTimers.set(actor.id, nextElapsed);
+      }
+    }
+  }
+
+  private tickPlayerIdleRegen(dt: number): void {
+    if (this.player.hp <= 0 || this.player.aiState === 'combat') {
+      this.playerIdleHpRegenTimer = 0;
+      this.playerIdleMpRegenTimer = 0;
+      return;
+    }
+
+    this.playerIdleHpRegenTimer += dt;
+    if (this.playerIdleHpRegenTimer >= PLAYER_IDLE_HP_REGEN_INTERVAL) {
+      const ticks = Math.floor(this.playerIdleHpRegenTimer / PLAYER_IDLE_HP_REGEN_INTERVAL);
+      this.playerIdleHpRegenTimer -= ticks * PLAYER_IDLE_HP_REGEN_INTERVAL;
+      this.restoreHiddenResource(this.player, this.player.maxHp * PLAYER_IDLE_HP_REGEN_RATIO * ticks, 0);
+    }
+
+    this.playerIdleMpRegenTimer += dt;
+    if (this.playerIdleMpRegenTimer >= PLAYER_IDLE_MP_REGEN_INTERVAL) {
+      const ticks = Math.floor(this.playerIdleMpRegenTimer / PLAYER_IDLE_MP_REGEN_INTERVAL);
+      this.playerIdleMpRegenTimer -= ticks * PLAYER_IDLE_MP_REGEN_INTERVAL;
+      this.restoreHiddenResource(this.player, 0, this.player.maxMp * PLAYER_IDLE_MP_REGEN_RATIO * ticks);
+    }
+  }
+
+  private restoreHiddenResource(target: Combatant, hpAmount: number, mpAmount: number): void {
+    if (hpAmount > 0) target.hp = Math.min(target.maxHp, target.hp + hpAmount);
+    if (mpAmount > 0) target.mp = Math.min(target.maxMp, target.mp + mpAmount);
+  }
+
+  private tickPlayerCombatState(dt: number): void {
+    if (this.player.aiState !== 'combat') return;
+    this.playerCombatTimer = Math.max(0, this.playerCombatTimer - dt);
+    if (this.playerCombatTimer <= 0) {
+      this.player.aiState = 'guard';
+    }
+  }
+
+  private markPlayerInCombat(): void {
+    if (this.player.hp <= 0) return;
+    this.player.aiState = 'combat';
+    this.playerCombatTimer = PLAYER_COMBAT_TIMEOUT;
+  }
+
+  private startNpcResetRegen(actor: Combatant): void {
+    if (actor.faction === 'player' || actor.hp <= 0) return;
+    this.npcResetRegenTimers.set(actor.id, 0);
+  }
+
+  private clearNpcResetRegen(actor: Combatant): void {
+    this.npcResetRegenTimers.delete(actor.id);
+  }
+
   private resolveBasicAttackWithWeapon(attacker: Combatant, target: Combatant, weapon?: WeaponDefinition, hand?: CombatHandSide): number {
     return this.resolveAttackWithWeapon(attacker, target, weapon, hand, 1, '普攻');
   }
 
   private resolveAttackWithWeapon(attacker: Combatant, target: Combatant, weapon: WeaponDefinition | undefined, hand: CombatHandSide | undefined, damageMultiplier: number, actionName: string): number {
+    if (attacker.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
     const table = buildAttackTable({
       attacker: attacker.attrs,
       defender: target.attrs,
@@ -781,7 +911,10 @@ export class RealtimeCombatEngine {
       target.hp = Math.max(0, target.hp - damage);
       if (target.hp > 0 && target.faction !== 'player') {
         if (target.faction === 'neutral') target.retaliationTargetId = attacker.id;
-        if (this.canAttack(target, attacker)) target.aiState = 'combat';
+        if (this.canAttack(target, attacker)) {
+          target.aiState = 'combat';
+          this.clearNpcResetRegen(target);
+        }
       }
       this.pushDamageEvent(attacker, target, outcome, damage, hand, actionName);
       if (target.hp <= 0) this.pushDeathEvent(attacker, target);
@@ -959,6 +1092,16 @@ export class RealtimeCombatEngine {
       action: { kind: 'basicAttack', name: actionName },
       resource,
       amount,
+    });
+  }
+
+  private pushActionFailEvent(source: Combatant, actionName: string, reason: SkillFailureReason): void {
+    this.onEvent?.({
+      id: this.nextLogId++,
+      kind: 'actionFail',
+      source: this.actorRef(source),
+      action: { kind: 'basicAttack', name: actionName },
+      reason,
     });
   }
 

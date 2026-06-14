@@ -24,6 +24,7 @@ export interface ActionLoadout {
 
 export interface ActionBarState {
   skillCooldowns: number[];
+  skillFailureReasons: (SkillFailureReason | null)[];
   itemUsed: boolean[];
 }
 
@@ -255,7 +256,8 @@ export interface StatusEffect {
 
 export type CombatSide = CombatFaction;
 export type CombatActionKind = 'basicAttack';
-export type CombatEventKind = 'damage' | 'miss' | 'status' | 'resource' | 'death' | 'battleEnd';
+export type SkillFailureReason = 'cooldown' | 'notEnoughMp' | 'noTarget' | 'tooClose' | 'tooFar' | 'notInMeleeRange' | 'blocked';
+export type CombatEventKind = 'damage' | 'miss' | 'status' | 'resource' | 'actionFail' | 'death' | 'battleEnd';
 export type BattleResult = 'playerWon' | 'playerLost';
 
 export interface CombatActorRef {
@@ -305,6 +307,11 @@ export interface ResourceEvent extends CombatEventBase {
   amount: number;
 }
 
+export interface ActionFailEvent extends CombatEventBase {
+  kind: 'actionFail';
+  reason: SkillFailureReason;
+}
+
 export interface DeathEvent extends CombatEventBase {
   kind: 'death';
   target: CombatActorRef;
@@ -315,7 +322,7 @@ export interface BattleEndEvent extends CombatEventBase {
   result: BattleResult;
 }
 
-export type CombatEvent = DamageEvent | MissEvent | StatusEvent | ResourceEvent | DeathEvent | BattleEndEvent;
+export type CombatEvent = DamageEvent | MissEvent | StatusEvent | ResourceEvent | ActionFailEvent | DeathEvent | BattleEndEvent;
 
 export interface InputState {
   move: Vec2;
