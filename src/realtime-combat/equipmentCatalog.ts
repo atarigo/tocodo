@@ -1,4 +1,5 @@
 import type { DefenseStats, EquipmentDefinition, EquipmentLoadout, EquipmentSlot, GearDefinition, WeaponDefinition } from './types.js';
+import { NATURAL_EQUIPMENT } from './naturalEquipmentCatalog.js';
 
 export const EQUIPMENT_SLOT_LABELS: Record<EquipmentSlot, string> = {
   mainHand: '主手',
@@ -182,6 +183,7 @@ export const GEAR: readonly GearDefinition[] = [
 ];
 
 export const EQUIPMENT: readonly EquipmentDefinition[] = [...WEAPONS, ...GEAR];
+const ALL_EQUIPMENT: readonly EquipmentDefinition[] = [...EQUIPMENT, ...NATURAL_EQUIPMENT];
 export const DEFAULT_LOADOUT: EquipmentLoadout = {
   mainHand: 'iron-sword',
   offHand: null,
@@ -192,7 +194,7 @@ export const DEFAULT_LOADOUT: EquipmentLoadout = {
 };
 
 export function getEquipment(id: string): EquipmentDefinition {
-  const equipment = EQUIPMENT.find((item) => item.id === id);
+  const equipment = ALL_EQUIPMENT.find((item) => item.id === id);
   if (!equipment) throw new Error(`Unknown equipment: ${id}`);
   return equipment;
 }
@@ -230,6 +232,7 @@ export function equipmentDefense(loadout: EquipmentLoadout): DefenseStats {
     const item = getEquipment(id);
     if ('damage' in item) {
       defense.parryRate += item.parryRate;
+      defense.blockRate += item.blockRate ?? 0;
       continue;
     }
     defense.armor += item.armor;

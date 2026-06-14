@@ -1,14 +1,16 @@
 <script lang="ts">
   import { navigate } from '../web/router.svelte.js';
-  import type { Attributes, BattleResult, CombatEvent, CombatHandSide, EquipmentLoadout } from './types.js';
+  import type { Attributes, BattleResult, BattleSetup, CombatEvent, CombatHandSide, DifficultyRank, EquipmentLoadout } from './types.js';
   import AttributePanel from './AttributePanel.svelte';
   import RealtimeCombatStage from './RealtimeCombatStage.svelte';
+  import { createRandomBattleSetup } from './battleSetup.js';
   import { DEFAULT_LOADOUT } from './equipmentCatalog.js';
 
   let events = $state<CombatEvent[]>([]);
   let playerAttrs = $state<Attributes>({ str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 });
-  let enemyAttrs = $state<Attributes>({ str: 8, vit: 8, agi: 8, dex: 8, wil: 6, luk: 6 });
+  let enemyDifficulty = $state<DifficultyRank>('D');
   let playerLoadout = $state<EquipmentLoadout>({ ...DEFAULT_LOADOUT });
+  let battleSetup = $state<BattleSetup | null>(null);
   let sessionId = $state(0);
   let started = $state(false);
   let battleResult = $state<BattleResult | null>(null);
@@ -20,10 +22,17 @@
   }
 
   function startGame(): void {
+    const nextSessionId = sessionId + 1;
     events = [];
     battleResult = null;
+    battleSetup = createRandomBattleSetup({
+      playerAttrs,
+      loadout: playerLoadout,
+      difficulty: enemyDifficulty,
+      seed: nextSessionId,
+    });
     started = true;
-    sessionId += 1;
+    sessionId = nextSessionId;
   }
 
   function outcomeNote(outcome: string): string {
@@ -63,12 +72,12 @@
 
 <main class="realtime-layout">
   <aside class="realtime-left">
-    <AttributePanel bind:playerAttrs bind:enemyAttrs bind:playerLoadout />
+    <AttributePanel bind:playerAttrs bind:enemyDifficulty bind:playerLoadout {battleSetup} />
   </aside>
   <section class="realtime-center">
-    {#if started}
+    {#if started && battleSetup}
       {#key sessionId}
-        <RealtimeCombatStage onEvent={addEvent} {playerAttrs} {enemyAttrs} {playerLoadout} {sessionId} />
+        <RealtimeCombatStage onEvent={addEvent} setup={battleSetup} {sessionId} />
       {/key}
       {#if battleResult}
         <div class="result-panel">

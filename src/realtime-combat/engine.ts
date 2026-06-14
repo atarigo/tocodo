@@ -66,7 +66,7 @@ function makeEnemy(
   spawn: EnemySpawn,
   attrsOverride?: Attributes,
 ): Combatant {
-  const attrs = cloneAttrs(attrsOverride ?? definition.attrs);
+  const attrs = cloneAttrs(attrsOverride ?? spawn.attrs ?? definition.attrs);
   const loadout = normalizeLoadout(definition.loadout);
   const hands = handsFromLoadout(loadout, attrs);
   const defense = equipmentDefense(loadout);
@@ -74,7 +74,7 @@ function makeEnemy(
     id,
     kind: definition.kind,
     definitionId: definition.id,
-    name: definition.name,
+    name: spawn.name ?? definition.name,
     attrs,
     radius: definition.radius,
     color: definition.color,

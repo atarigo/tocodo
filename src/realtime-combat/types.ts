@@ -7,6 +7,7 @@ export type CombatantKind = 'player' | 'meleeEnemy' | 'rangedEnemy';
 export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
 export type AttackMode = 'melee' | 'projectile';
 export type AmmoType = 'arrow' | 'bullet';
+export type DifficultyRank = 'D' | 'C' | 'B' | 'A' | 'S';
 export type EquipmentSlot = 'mainHand' | 'offHand' | 'head' | 'body' | 'legs' | 'feet';
 export type EquipmentLoadout = Record<EquipmentSlot, string | null>;
 
@@ -87,6 +88,7 @@ export interface WeaponDefinition {
   agiApplies: boolean;
   dexAmp: boolean;
   parryRate: number;
+  blockRate?: number;
   projectile?: {
     ammoType: AmmoType;
     shotsPerAttack: number;
@@ -136,9 +138,13 @@ export interface EnemySpawn {
   enemyId: string;
   position: Vec2;
   facing?: number;
+  name?: string;
+  attrs?: Attributes;
 }
 
 export interface BattleSetup {
+  difficulty?: DifficultyRank;
+  encounterName?: string;
   player: {
     name: string;
     attrs: Attributes;
@@ -147,6 +153,7 @@ export interface BattleSetup {
     facing: number;
   };
   enemies: EnemySpawn[];
+  allies?: EnemySpawn[];
 }
 
 export interface Projectile {
