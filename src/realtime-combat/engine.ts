@@ -2,7 +2,7 @@ import Matter from 'matter-js';
 import { buildAttackTable, resolveDamage, rollOutcome, type AttackOutcome } from './attackTable.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
 import { createRng, type Rng } from './rng.js';
-import type { Attributes, CombatLogEntry, Combatant, DamageText, Impact, InputState, Projectile, Strike, Vec2 } from './types.js';
+import type { Attributes, CombatActorRef, CombatEvent, Combatant, DamageText, Impact, InputState, Projectile, Strike, Vec2 } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
@@ -53,6 +53,10 @@ function baseAttrs(extra: Partial<Attributes> = {}): Attributes {
   };
 }
 
+function cloneAttrs(attrs: Attributes): Attributes {
+  return { ...attrs };
+}
+
 export class RealtimeCombatEngine {
   readonly player: Combatant;
   readonly enemies: Combatant[];
@@ -64,19 +68,21 @@ export class RealtimeCombatEngine {
   private readonly matter = Matter.Engine.create({ gravity: { x: 0, y: 0 } });
   private readonly bodies = new Map<number, Matter.Body>();
   private readonly rng: Rng;
-  private readonly onLog?: (entry: CombatLogEntry) => void;
+  private readonly onEvent?: (event: CombatEvent) => void;
   private nextEffectId = 1;
   private nextProjectileId = 1;
   private nextLogId = 1;
 
-  constructor(opts: { seed?: number; onLog?: (entry: CombatLogEntry) => void } = {}) {
+  constructor(opts: { seed?: number; onEvent?: (event: CombatEvent) => void; playerAttrs?: Attributes; enemyAttrs?: Attributes } = {}) {
     this.rng = createRng(opts.seed ?? Date.now());
-    this.onLog = opts.onLog;
+    this.onEvent = opts.onEvent;
+    const playerAttrs = cloneAttrs(opts.playerAttrs ?? baseAttrs());
+    const enemyAttrs = cloneAttrs(opts.enemyAttrs ?? baseAttrs({ str: 8, vit: 8, agi: 8, dex: 8, wil: 6, luk: 6 }));
     this.player = makeCombatant({
       id: PLAYER_ID,
       kind: 'player',
       name: '玩家',
-      attrs: baseAttrs(),
+      attrs: playerAttrs,
       radius: 17,
       color: 0x5b8def,
       position: { x: 400, y: 310 },
@@ -84,7 +90,7 @@ export class RealtimeCombatEngine {
       speed: 230,
       attackRange: 88,
       attackArc: Math.PI / 2,
-      attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, 10),
+      attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, playerAttrs.agi),
       armor: 0,
       reductionRate: 0,
       parryRate: 0,
@@ -96,7 +102,7 @@ export class RealtimeCombatEngine {
         id: 2,
         kind: 'meleeEnemy',
         name: '赤色斥候',
-        attrs: baseAttrs({ str: 8, vit: 8, agi: 8, dex: 8, wil: 6, luk: 6 }),
+        attrs: cloneAttrs(enemyAttrs),
         radius: 16,
         color: 0xe0564b,
         position: { x: 190, y: 180 },
@@ -104,7 +110,7 @@ export class RealtimeCombatEngine {
         speed: 86,
         attackRange: 70,
         attackArc: Math.PI / 2,
-        attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, 8),
+        attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, enemyAttrs.agi),
         armor: 0,
         reductionRate: 0,
         parryRate: 0,
@@ -114,7 +120,7 @@ export class RealtimeCombatEngine {
         id: 3,
         kind: 'meleeEnemy',
         name: '橙色守衛',
-        attrs: baseAttrs({ str: 11, vit: 12, agi: 6, dex: 8, wil: 8, luk: 5 }),
+        attrs: cloneAttrs(enemyAttrs),
         radius: 16,
         color: 0xe0954b,
         position: { x: 610, y: 430 },
@@ -122,7 +128,7 @@ export class RealtimeCombatEngine {
         speed: 78,
         attackRange: 70,
         attackArc: Math.PI / 2,
-        attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, 6),
+        attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, enemyAttrs.agi),
         armor: 1,
         reductionRate: 0,
         parryRate: 0,
@@ -132,7 +138,7 @@ export class RealtimeCombatEngine {
         id: 4,
         kind: 'rangedEnemy',
         name: '紫色射手',
-        attrs: baseAttrs({ str: 7, vit: 7, agi: 10, dex: 12, wil: 10, luk: 8 }),
+        attrs: cloneAttrs(enemyAttrs),
         radius: 14,
         color: 0xb04bd9,
         position: { x: 640, y: 150 },
@@ -140,7 +146,7 @@ export class RealtimeCombatEngine {
         speed: 62,
         attackRange: 245,
         attackArc: Math.PI / 5,
-        attackCooldown: attackInterval(1.25, 10),
+        attackCooldown: attackInterval(1.25, enemyAttrs.agi),
         armor: 0,
         reductionRate: 0,
         parryRate: 0,
@@ -386,20 +392,53 @@ export class RealtimeCombatEngine {
     const result = resolveDamage(outcome, base, { armor: target.armor, reductionRate: target.reductionRate });
     const damage = result.damage;
 
-    target.hp = Math.max(0, target.hp - damage);
-    this.pushAttackLog(attacker, target, outcome, damage);
+    if (damage > 0) {
+      target.hp = Math.max(0, target.hp - damage);
+      this.pushDamageEvent(attacker, target, outcome, damage);
+      if (target.hp <= 0) this.pushDeathEvent(attacker, target);
+    } else {
+      this.pushMissEvent(attacker, target, outcome);
+    }
     return damage;
   }
 
-  private pushAttackLog(attacker: Combatant, target: Combatant, outcome: AttackOutcome, damage: number): void {
-    this.onLog?.({
+  private actorRef(combatant: Combatant): CombatActorRef {
+    return {
+      id: combatant.id,
+      side: combatant.kind === 'player' ? 'player' : 'enemy',
+      name: combatant.name,
+    };
+  }
+
+  private pushDamageEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome, damage: number): void {
+    this.onEvent?.({
       id: this.nextLogId++,
-      actorSide: attacker.kind === 'player' ? 'player' : 'enemy',
-      actorName: attacker.name,
-      targetName: target.name,
-      action: '普攻',
-      damage,
+      kind: 'damage',
+      source: this.actorRef(attacker),
+      target: this.actorRef(target),
+      action: { kind: 'basicAttack', name: '普攻' },
+      amount: damage,
       outcome,
+    });
+  }
+
+  private pushMissEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome): void {
+    this.onEvent?.({
+      id: this.nextLogId++,
+      kind: 'miss',
+      source: this.actorRef(attacker),
+      target: this.actorRef(target),
+      action: { kind: 'basicAttack', name: '普攻' },
+      outcome,
+    });
+  }
+
+  private pushDeathEvent(attacker: Combatant, target: Combatant): void {
+    this.onEvent?.({
+      id: this.nextLogId++,
+      kind: 'death',
+      source: this.actorRef(attacker),
+      target: this.actorRef(target),
     });
   }
 }

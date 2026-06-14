@@ -24,6 +24,8 @@ export const ATTR_NAMES: Record<keyof Attributes, string> = {
   luk: '幸運',
 };
 
+export const ATTR_KEYS: (keyof Attributes)[] = ['str', 'vit', 'agi', 'dex', 'wil', 'luk'];
+
 export interface Combatant {
   id: number;
   kind: CombatantKind;
@@ -83,15 +85,61 @@ export interface DamageText {
   ttl: number;
 }
 
-export interface CombatLogEntry {
+export type CombatSide = 'player' | 'enemy';
+export type CombatActionKind = 'basicAttack';
+export type CombatEventKind = 'damage' | 'miss' | 'status' | 'resource' | 'death';
+
+export interface CombatActorRef {
   id: number;
-  actorSide: 'player' | 'enemy';
-  actorName: string;
-  targetName: string;
-  action: '普攻';
-  damage: number;
+  side: CombatSide;
+  name: string;
+}
+
+export interface CombatActionRef {
+  kind: CombatActionKind;
+  name: string;
+}
+
+interface CombatEventBase {
+  id: number;
+  kind: CombatEventKind;
+  source: CombatActorRef;
+  action?: CombatActionRef;
+}
+
+export interface DamageEvent extends CombatEventBase {
+  kind: 'damage';
+  target: CombatActorRef;
+  amount: number;
   outcome: string;
 }
+
+export interface MissEvent extends CombatEventBase {
+  kind: 'miss';
+  target: CombatActorRef;
+  outcome: string;
+}
+
+export interface StatusEvent extends CombatEventBase {
+  kind: 'status';
+  target: CombatActorRef;
+  statusName: string;
+  statusAction: 'apply' | 'expire' | 'resist';
+}
+
+export interface ResourceEvent extends CombatEventBase {
+  kind: 'resource';
+  target: CombatActorRef;
+  resource: 'hp' | 'mp';
+  amount: number;
+}
+
+export interface DeathEvent extends CombatEventBase {
+  kind: 'death';
+  target: CombatActorRef;
+}
+
+export type CombatEvent = DamageEvent | MissEvent | StatusEvent | ResourceEvent | DeathEvent;
 
 export interface InputState {
   move: Vec2;

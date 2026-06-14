@@ -1,13 +1,41 @@
 <script lang="ts">
   import { navigate } from '../web/router.svelte.js';
-  import type { CombatLogEntry } from './types.js';
+  import type { Attributes, CombatEvent } from './types.js';
+  import AttributePanel from './AttributePanel.svelte';
   import RealtimeCombatStage from './RealtimeCombatStage.svelte';
 
-  let logs = $state<CombatLogEntry[]>([]);
+  let events = $state<CombatEvent[]>([]);
+  let playerAttrs = $state<Attributes>({ str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 });
+  let enemyAttrs = $state<Attributes>({ str: 8, vit: 8, agi: 8, dex: 8, wil: 6, luk: 6 });
+  let sessionId = $state(0);
+  let started = $state(false);
 
-  function addLog(entry: CombatLogEntry): void {
-    logs.unshift(entry);
-    if (logs.length > 120) logs.length = 120;
+  function addEvent(event: CombatEvent): void {
+    events.unshift(event);
+    if (events.length > 120) events.length = 120;
+  }
+
+  function startGame(): void {
+    events = [];
+    started = true;
+    sessionId += 1;
+  }
+
+  function eventText(event: CombatEvent): string {
+    switch (event.kind) {
+      case 'damage':
+        return `${event.source.name} 使用 ${event.action?.name ?? '動作'} 造成 ${event.target.name} ${event.amount} 點傷害`;
+      case 'miss':
+        return `${event.source.name} 使用 ${event.action?.name ?? '動作'}，${event.target.name} ${event.outcome}`;
+      case 'status':
+        return `${event.target.name} ${event.statusAction} ${event.statusName}`;
+      case 'resource':
+        return `${event.target.name} ${event.resource} ${event.amount}`;
+      case 'death':
+        return `${event.target.name} 倒下`;
+      default:
+        return '';
+    }
   }
 </script>
 
@@ -17,16 +45,31 @@
 </header>
 
 <main class="realtime-layout">
-  <aside class="side-slot"></aside>
+  <aside class="realtime-left">
+    <AttributePanel bind:playerAttrs bind:enemyAttrs />
+  </aside>
   <section class="realtime-center">
-    <RealtimeCombatStage onLog={addLog} />
+    {#if started}
+      {#key sessionId}
+        <RealtimeCombatStage onEvent={addEvent} {playerAttrs} {enemyAttrs} {sessionId} />
+      {/key}
+    {:else}
+      <div class="start-panel">
+        <button class="primary" onclick={startGame}>開始遊戲</button>
+      </div>
+    {/if}
+    {#if started}
+      <div class="stage-actions">
+        <button onclick={startGame}>重新開始</button>
+      </div>
+    {/if}
   </section>
   <aside class="realtime-log">
     <h2>戰鬥日誌</h2>
     <div class="log-list">
-      {#each logs as entry (entry.id)}
-        <div class:player-line={entry.actorSide === 'player'} class:enemy-line={entry.actorSide === 'enemy'}>
-          {entry.actorName} 使用 {entry.action} 造成 {entry.targetName} {entry.damage} 點傷害
+      {#each events as event (event.id)}
+        <div class:player-line={event.source.side === 'player'} class:enemy-line={event.source.side === 'enemy'}>
+          {eventText(event)}
         </div>
       {/each}
     </div>
@@ -43,7 +86,7 @@
     padding: 10px;
   }
 
-  .side-slot,
+  .realtime-left,
   .realtime-center,
   .realtime-log {
     min-height: 0;
@@ -52,13 +95,35 @@
     background: var(--panel);
   }
 
-  .side-slot {
-    opacity: 0.35;
+  .realtime-left {
+    overflow-y: auto;
+    padding: 0;
   }
 
   .realtime-center {
+    position: relative;
     overflow: hidden;
     padding: 12px;
+  }
+
+  .start-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 520px;
+  }
+
+  .stage-actions {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 2;
+  }
+
+  .stage-actions button {
+    background: rgba(42, 45, 57, 0.88);
+    backdrop-filter: blur(4px);
   }
 
   .realtime-log {
@@ -98,7 +163,7 @@
       grid-template-columns: 1fr;
     }
 
-    .side-slot,
+    .realtime-left,
     .realtime-log {
       display: none;
     }

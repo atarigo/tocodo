@@ -2,10 +2,20 @@
   import { onDestroy, onMount } from 'svelte';
   import { Application, Container, Graphics, Text } from 'pixi.js';
   import { RealtimeCombatEngine } from './engine.js';
-  import type { CombatLogEntry, Combatant, InputState, Strike, Vec2 } from './types.js';
+  import type { Attributes, CombatEvent, Combatant, InputState, Strike, Vec2 } from './types.js';
   import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
-  let { onLog }: { onLog?: (entry: CombatLogEntry) => void } = $props();
+  let {
+    onEvent,
+    playerAttrs,
+    enemyAttrs,
+    sessionId,
+  }: {
+    onEvent?: (event: CombatEvent) => void;
+    playerAttrs: Attributes;
+    enemyAttrs: Attributes;
+    sessionId: number;
+  } = $props();
 
   let host: HTMLDivElement;
 
@@ -154,7 +164,7 @@
 
   onMount(() => {
     let destroyed = false;
-    const localEngine = new RealtimeCombatEngine({ onLog });
+    const localEngine = new RealtimeCombatEngine({ seed: sessionId, onEvent, playerAttrs, enemyAttrs });
     engine = localEngine;
 
     const onKeyDown = (event: KeyboardEvent) => {
