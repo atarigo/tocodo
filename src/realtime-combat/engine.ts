@@ -1,8 +1,10 @@
 import Matter from 'matter-js';
 import { buildAttackTable, resolveDamage, rollOutcome, type AttackOutcome } from './attackTable.js';
+import { createDefaultBattleSetup } from './battleSetup.js';
+import { enemyById } from './enemyCatalog.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
 import { createRng, type Rng } from './rng.js';
-import type { Attributes, BattleResult, CombatActorRef, CombatEvent, Combatant, DamageText, Impact, InputState, Projectile, Strike, Vec2 } from './types.js';
+import type { Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2 } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
@@ -42,19 +44,31 @@ function makeCombatant(
   return { ...params, hp, maxHp: hp, mp, maxMp: mp, cooldown: 0, flash: 0, bodyId: null };
 }
 
-function baseAttrs(extra: Partial<Attributes> = {}): Attributes {
-  return {
-    str: extra.str ?? 10,
-    vit: extra.vit ?? 10,
-    agi: extra.agi ?? 10,
-    dex: extra.dex ?? 10,
-    wil: extra.wil ?? 10,
-    luk: extra.luk ?? 10,
-  };
-}
-
 function cloneAttrs(attrs: Attributes): Attributes {
   return { ...attrs };
+}
+
+function makeEnemy(id: number, definition: EnemyDefinition, spawn: EnemySpawn, attrsOverride?: Attributes): Combatant {
+  const attrs = cloneAttrs(attrsOverride ?? definition.attrs);
+  return makeCombatant({
+    id,
+    kind: definition.kind,
+    definitionId: definition.id,
+    name: definition.name,
+    attrs,
+    radius: definition.radius,
+    color: definition.color,
+    position: { ...spawn.position },
+    facing: spawn.facing ?? 0,
+    speed: definition.speed,
+    attackRange: definition.attackRange,
+    attackArc: definition.attackArc,
+    attackCooldown: attackInterval(definition.baseAttackInterval, attrs.agi),
+    armor: definition.armor,
+    reductionRate: definition.reductionRate,
+    parryRate: definition.parryRate,
+    blockRate: definition.blockRate,
+  });
 }
 
 export class RealtimeCombatEngine {
@@ -74,86 +88,32 @@ export class RealtimeCombatEngine {
   private nextLogId = 1;
   private result: BattleResult | null = null;
 
-  constructor(opts: { seed?: number; onEvent?: (event: CombatEvent) => void; playerAttrs?: Attributes; enemyAttrs?: Attributes } = {}) {
+  constructor(opts: { seed?: number; onEvent?: (event: CombatEvent) => void; setup?: BattleSetup; enemyAttrsOverride?: Attributes } = {}) {
     this.rng = createRng(opts.seed ?? Date.now());
     this.onEvent = opts.onEvent;
-    const playerAttrs = cloneAttrs(opts.playerAttrs ?? baseAttrs());
-    const enemyAttrs = cloneAttrs(opts.enemyAttrs ?? baseAttrs({ str: 8, vit: 8, agi: 8, dex: 8, wil: 6, luk: 6 }));
+    const setup = opts.setup ?? createDefaultBattleSetup();
     this.player = makeCombatant({
       id: PLAYER_ID,
       kind: 'player',
-      name: '玩家',
-      attrs: playerAttrs,
+      name: setup.player.name,
+      attrs: cloneAttrs(setup.player.attrs),
       radius: 17,
       color: 0x5b8def,
-      position: { x: 400, y: 310 },
-      facing: -Math.PI / 2,
+      position: { ...setup.player.position },
+      facing: setup.player.facing,
       speed: 230,
       attackRange: 88,
       attackArc: Math.PI / 2,
-      attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, playerAttrs.agi),
+      attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, setup.player.attrs.agi),
       armor: 0,
       reductionRate: 0,
       parryRate: 0,
       blockRate: 0,
     });
 
-    this.enemies = [
-      makeCombatant({
-        id: 2,
-        kind: 'meleeEnemy',
-        name: '赤色斥候',
-        attrs: cloneAttrs(enemyAttrs),
-        radius: 16,
-        color: 0xe0564b,
-        position: { x: 190, y: 180 },
-        facing: 0,
-        speed: 86,
-        attackRange: 70,
-        attackArc: Math.PI / 2,
-        attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, enemyAttrs.agi),
-        armor: 0,
-        reductionRate: 0,
-        parryRate: 0,
-        blockRate: 0,
-      }),
-      makeCombatant({
-        id: 3,
-        kind: 'meleeEnemy',
-        name: '橙色守衛',
-        attrs: cloneAttrs(enemyAttrs),
-        radius: 16,
-        color: 0xe0954b,
-        position: { x: 610, y: 430 },
-        facing: Math.PI,
-        speed: 78,
-        attackRange: 70,
-        attackArc: Math.PI / 2,
-        attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, enemyAttrs.agi),
-        armor: 1,
-        reductionRate: 0,
-        parryRate: 0,
-        blockRate: 0,
-      }),
-      makeCombatant({
-        id: 4,
-        kind: 'rangedEnemy',
-        name: '紫色射手',
-        attrs: cloneAttrs(enemyAttrs),
-        radius: 14,
-        color: 0xb04bd9,
-        position: { x: 640, y: 150 },
-        facing: Math.PI,
-        speed: 62,
-        attackRange: 245,
-        attackArc: Math.PI / 5,
-        attackCooldown: attackInterval(1.25, enemyAttrs.agi),
-        armor: 0,
-        reductionRate: 0,
-        parryRate: 0,
-        blockRate: 0,
-      }),
-    ];
+    this.enemies = setup.enemies.map((spawn, index) =>
+      makeEnemy(2 + index, enemyById(spawn.enemyId), spawn, opts.enemyAttrsOverride),
+    );
 
     this.addWalls();
     this.addBody(this.player);
@@ -232,7 +192,8 @@ export class RealtimeCombatEngine {
       enemy.facing = Math.atan2(dir.y, dir.x);
 
       if (enemy.kind === 'rangedEnemy') {
-        const preferred = 170;
+        const definition = this.definitionFor(enemy);
+        const preferred = definition.preferredRange ?? 170;
         const moveSign = d < preferred ? -1 : 1;
         const shouldMove = Math.abs(d - preferred) > 26;
         this.setVelocity(enemy, shouldMove ? { x: dir.x * enemy.speed * moveSign, y: dir.y * enemy.speed * moveSign } : { x: 0, y: 0 });
@@ -312,6 +273,7 @@ export class RealtimeCombatEngine {
     });
     attacker.cooldown = attacker.attackCooldown;
     attacker.flash = 0.08;
+    const projectileSpeed = this.definitionFor(attacker).projectileSpeed ?? 285;
     this.projectiles.push({
       id: this.nextProjectileId++,
       ownerId: attacker.id,
@@ -319,7 +281,7 @@ export class RealtimeCombatEngine {
         x: attacker.position.x + dir.x * (attacker.radius + 8),
         y: attacker.position.y + dir.y * (attacker.radius + 8),
       },
-      velocity: { x: dir.x * 285, y: dir.y * 285 },
+      velocity: { x: dir.x * projectileSpeed, y: dir.y * projectileSpeed },
       radius: 5,
       ttl: 2.2,
     });
@@ -412,6 +374,11 @@ export class RealtimeCombatEngine {
       this.pushMissEvent(attacker, target, outcome);
     }
     return damage;
+  }
+
+  private definitionFor(enemy: Combatant): EnemyDefinition {
+    if (!enemy.definitionId) throw new Error(`${enemy.name} does not have an enemy definition`);
+    return enemyById(enemy.definitionId);
   }
 
   private checkBattleEnd(): void {

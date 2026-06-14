@@ -1,0 +1,60 @@
+import type { EnemyDefinition } from './types.js';
+
+export const ENEMY_CATALOG: Record<string, EnemyDefinition> = {
+  redScout: {
+    id: 'redScout',
+    name: '赤色斥候',
+    kind: 'meleeEnemy',
+    attrs: { str: 8, vit: 8, agi: 8, dex: 8, wil: 6, luk: 6 },
+    radius: 16,
+    color: 0xe0564b,
+    speed: 86,
+    attackRange: 70,
+    attackArc: Math.PI / 2,
+    baseAttackInterval: 0.82,
+    armor: 0,
+    reductionRate: 0,
+    parryRate: 0,
+    blockRate: 0,
+  },
+  orangeGuard: {
+    id: 'orangeGuard',
+    name: '橙色守衛',
+    kind: 'meleeEnemy',
+    attrs: { str: 11, vit: 12, agi: 6, dex: 8, wil: 8, luk: 5 },
+    radius: 16,
+    color: 0xe0954b,
+    speed: 78,
+    attackRange: 70,
+    attackArc: Math.PI / 2,
+    baseAttackInterval: 0.82,
+    armor: 1,
+    reductionRate: 0,
+    parryRate: 0,
+    blockRate: 0,
+  },
+  purpleShooter: {
+    id: 'purpleShooter',
+    name: '紫色射手',
+    kind: 'rangedEnemy',
+    attrs: { str: 7, vit: 7, agi: 10, dex: 12, wil: 10, luk: 8 },
+    radius: 14,
+    color: 0xb04bd9,
+    speed: 62,
+    attackRange: 245,
+    attackArc: Math.PI / 5,
+    baseAttackInterval: 1.25,
+    preferredRange: 170,
+    projectileSpeed: 285,
+    armor: 0,
+    reductionRate: 0,
+    parryRate: 0,
+    blockRate: 0,
+  },
+};
+
+export function enemyById(id: string): EnemyDefinition {
+  const enemy = ENEMY_CATALOG[id];
+  if (!enemy) throw new Error(`Unknown enemy: ${id}`);
+  return enemy;
+}

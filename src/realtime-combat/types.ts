@@ -29,6 +29,7 @@ export const ATTR_KEYS: (keyof Attributes)[] = ['str', 'vit', 'agi', 'dex', 'wil
 export interface Combatant {
   id: number;
   kind: CombatantKind;
+  definitionId?: string;
   name: string;
   attrs: Attributes;
   radius: number;
@@ -50,6 +51,41 @@ export interface Combatant {
   blockRate: number;
   flash: number;
   bodyId: number | null;
+}
+
+export interface EnemyDefinition {
+  id: string;
+  name: string;
+  kind: Exclude<CombatantKind, 'player'>;
+  attrs: Attributes;
+  radius: number;
+  color: number;
+  speed: number;
+  attackRange: number;
+  attackArc: number;
+  baseAttackInterval: number;
+  preferredRange?: number;
+  projectileSpeed?: number;
+  armor: number;
+  reductionRate: number;
+  parryRate: number;
+  blockRate: number;
+}
+
+export interface EnemySpawn {
+  enemyId: string;
+  position: Vec2;
+  facing?: number;
+}
+
+export interface BattleSetup {
+  player: {
+    name: string;
+    attrs: Attributes;
+    position: Vec2;
+    facing: number;
+  };
+  enemies: EnemySpawn[];
 }
 
 export interface Projectile {

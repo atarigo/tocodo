@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { Application, Container, Graphics, Text } from 'pixi.js';
+  import { createDefaultBattleSetup } from './battleSetup.js';
   import { RealtimeCombatEngine } from './engine.js';
   import type { Attributes, CombatEvent, Combatant, InputState, Strike, Vec2 } from './types.js';
   import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
@@ -164,7 +165,12 @@
 
   onMount(() => {
     let destroyed = false;
-    const localEngine = new RealtimeCombatEngine({ seed: sessionId, onEvent, playerAttrs, enemyAttrs });
+    const localEngine = new RealtimeCombatEngine({
+      seed: sessionId,
+      onEvent,
+      setup: createDefaultBattleSetup(playerAttrs),
+      enemyAttrsOverride: enemyAttrs,
+    });
     engine = localEngine;
 
     const onKeyDown = (event: KeyboardEvent) => {
