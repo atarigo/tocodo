@@ -2,15 +2,19 @@
   import { onDestroy, onMount } from 'svelte';
   import { Application, Container, Graphics, Text } from 'pixi.js';
   import { RealtimeCombatEngine } from './engine.js';
-  import type { BattleSetup, CombatEvent, Combatant, InputState, Strike, Vec2 } from './types.js';
+  import type { ActionBarState, BattleSetup, CombatEvent, Combatant, InputState, StatusEffect, Strike, Vec2 } from './types.js';
   import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
   let {
     onEvent,
+    onPlayerActionState,
+    onPlayerStatuses,
     setup,
     sessionId,
   }: {
     onEvent?: (event: CombatEvent) => void;
+    onPlayerActionState?: (state: ActionBarState) => void;
+    onPlayerStatuses?: (statuses: StatusEffect[]) => void;
     setup: BattleSetup;
     sessionId: number;
   } = $props();
@@ -209,6 +213,7 @@
       label.anchor.set(0.5, 0.5);
       label.alpha = Math.max(0, Math.min(1, damageText.ttl / 0.35));
       label.position.set(damageText.position.x, damageText.position.y);
+      label.style.fill = damageText.color ?? 0xff4d42;
       effectsLayer.addChild(label);
     }
     drawCombatant(entitiesLayer, engine.player);
@@ -237,6 +242,12 @@
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
+      if (event.code.startsWith('Digit')) {
+        const slot = Number(event.code.replace('Digit', '')) - 1;
+        if (slot >= 0 && slot < 5) localEngine.usePlayerSkillSlot(slot);
+      }
+      if (event.code === 'KeyQ') localEngine.usePlayerItemSlot(0);
+      if (event.code === 'KeyE') localEngine.usePlayerItemSlot(1);
       keys.add(event.code);
     };
     const onKeyUp = (event: KeyboardEvent) => {
@@ -302,6 +313,11 @@
         syncMovement();
         syncAimFromPointer();
         localEngine.step(input, ticker.deltaMS / 1000);
+        onPlayerStatuses?.(localEngine.statusEffects.filter((effect) => effect.targetId === localEngine.player.id));
+        onPlayerActionState?.({
+          skillCooldowns: localEngine.player.skillSlots.map((skillId) => (skillId ? (localEngine.player.skillCooldowns[skillId] ?? 0) : 0)),
+          itemUsed: [...localEngine.player.itemUsed],
+        });
         render();
       });
     })();

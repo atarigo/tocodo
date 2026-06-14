@@ -10,8 +10,20 @@ export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
 export type AttackMode = 'melee' | 'projectile';
 export type AmmoType = 'arrow' | 'bullet';
 export type DifficultyRank = 'D' | 'C' | 'B' | 'A' | 'S';
+export type SkillId = 'charge' | 'bite' | 'heal';
+export type ItemId = 'smallHealthPotion';
+export type StatusId = 'bleed' | 'healing';
 export type EquipmentSlot = 'mainHand' | 'offHand' | 'head' | 'body' | 'legs' | 'feet';
 export type EquipmentLoadout = Record<EquipmentSlot, string | null>;
+export interface ActionLoadout {
+  skillSlots: (SkillId | null)[];
+  itemSlots: (ItemId | null)[];
+}
+
+export interface ActionBarState {
+  skillCooldowns: number[];
+  itemUsed: boolean[];
+}
 
 /** 六主屬性：範圍 0〜255、起始 10；沒有預設數值，基本狀態全由屬性或裝備提供 */
 export interface Attributes {
@@ -65,6 +77,11 @@ export interface Combatant {
   flash: number;
   bodyId: number | null;
   hands: CombatHand[];
+  skills: SkillId[];
+  skillSlots: (SkillId | null)[];
+  skillCooldowns: Partial<Record<SkillId, number>>;
+  itemSlots: (ItemId | null)[];
+  itemUsed: boolean[];
   aiState: AiState;
   defaultAiState: AiState;
   alertRange: number;
@@ -139,6 +156,7 @@ export interface EnemyDefinition {
   aiState?: AiState;
   alertRange?: number;
   leashRange?: number;
+  skills?: SkillId[];
   armor: number;
   reductionRate: number;
   parryRate: number;
@@ -171,6 +189,7 @@ export interface BattleSetup {
     name: string;
     attrs: Attributes;
     loadout: EquipmentLoadout;
+    actionLoadout: ActionLoadout;
     position: Vec2;
     facing: number;
   };
@@ -214,6 +233,20 @@ export interface DamageText {
   position: Vec2;
   text: string;
   ttl: number;
+  color?: number;
+}
+
+export interface StatusEffect {
+  id: number;
+  statusId: StatusId;
+  name: string;
+  sourceId: number;
+  targetId: number;
+  amountPerTick: number;
+  effectType: 'damage' | 'heal';
+  remaining: number;
+  tickInterval: number;
+  tickTimer: number;
 }
 
 export type CombatSide = CombatFaction;

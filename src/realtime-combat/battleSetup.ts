@@ -1,19 +1,25 @@
-import type { ArenaObstacle, Attributes, BattleSetup, DifficultyRank, EquipmentLoadout } from './types.js';
+import type { ActionLoadout, ArenaObstacle, Attributes, BattleSetup, DifficultyRank, EquipmentLoadout } from './types.js';
 import { createEncounterSpawns } from './encounterCatalog.js';
 import { DEFAULT_LOADOUT } from './equipmentCatalog.js';
 import { createRng } from './rng.js';
 
 const DEFAULT_PLAYER_ATTRS: Attributes = { str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 };
+export const DEFAULT_ACTION_LOADOUT: ActionLoadout = {
+  skillSlots: ['heal', null, null, null, null],
+  itemSlots: ['smallHealthPotion', null],
+};
 
 export function createDefaultBattleSetup(
   playerAttrs: Attributes = DEFAULT_PLAYER_ATTRS,
   loadout = DEFAULT_LOADOUT,
+  actionLoadout = DEFAULT_ACTION_LOADOUT,
 ): BattleSetup {
   return {
     player: {
       name: '玩家',
       attrs: { ...playerAttrs },
       loadout: { ...loadout },
+      actionLoadout: cloneActionLoadout(actionLoadout),
       position: { x: 400, y: 310 },
       facing: -Math.PI / 2,
     },
@@ -29,6 +35,7 @@ export function createDefaultBattleSetup(
 export function createRandomBattleSetup(params: {
   playerAttrs: Attributes;
   loadout: EquipmentLoadout;
+  actionLoadout: ActionLoadout;
   difficulty: DifficultyRank;
   seed: number;
 }): BattleSetup {
@@ -40,6 +47,7 @@ export function createRandomBattleSetup(params: {
       name: '玩家',
       attrs: { ...params.playerAttrs },
       loadout: { ...params.loadout },
+      actionLoadout: cloneActionLoadout(params.actionLoadout),
       position: { x: 400, y: 310 },
       facing: -Math.PI / 2,
     },
@@ -47,6 +55,13 @@ export function createRandomBattleSetup(params: {
     allies: encounter.allies,
     neutrals: encounter.neutrals,
     obstacles: createRandomObstacles(params.seed + 101),
+  };
+}
+
+function cloneActionLoadout(loadout: ActionLoadout): ActionLoadout {
+  return {
+    skillSlots: [...loadout.skillSlots],
+    itemSlots: [...loadout.itemSlots],
   };
 }
 

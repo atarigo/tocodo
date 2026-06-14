@@ -5,8 +5,10 @@ import { createDefaultBattleSetup } from './battleSetup.js';
 import { enemyById } from './enemyCatalog.js';
 import { equipmentDefense, getOffhandWeapon, getWeapon, normalizeLoadout } from './equipmentCatalog.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
+import { itemById } from './itemCatalog.js';
 import { createRng, type Rng } from './rng.js';
-import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2, WeaponDefinition } from './types.js';
+import { skillById, type SkillDefinition } from './skillCatalog.js';
+import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, ItemId, Projectile, SkillId, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
@@ -135,6 +137,11 @@ function makeEnemy(
     parryRate: Math.min(1, definition.parryRate + defense.parryRate),
     blockRate: Math.min(1, definition.blockRate + defense.blockRate),
     hands,
+    skills: definition.skills ?? [],
+    skillSlots: definition.skills ?? [],
+    skillCooldowns: {},
+    itemSlots: [],
+    itemUsed: [],
     aiState: spawn.aiState ?? definition.aiState ?? 'guard',
     defaultAiState: spawn.aiState ?? definition.aiState ?? 'guard',
     alertRange: spawn.alertRange ?? definition.alertRange ?? DEFAULT_ALERT_RANGE,
@@ -186,6 +193,7 @@ export class RealtimeCombatEngine {
   readonly strikes: Strike[] = [];
   readonly impacts: Impact[] = [];
   readonly damageTexts: DamageText[] = [];
+  readonly statusEffects: StatusEffect[] = [];
 
   private readonly matter = Matter.Engine.create({ gravity: { x: 0, y: 0 } });
   private readonly bodies = new Map<number, Matter.Body>();
@@ -220,6 +228,11 @@ export class RealtimeCombatEngine {
       parryRate: playerDefense.parryRate,
       blockRate: playerDefense.blockRate,
       hands: playerHands,
+      skills: setup.player.actionLoadout.skillSlots.filter((skillId): skillId is SkillId => !!skillId),
+      skillSlots: [...setup.player.actionLoadout.skillSlots],
+      skillCooldowns: {},
+      itemSlots: [...setup.player.actionLoadout.itemSlots],
+      itemUsed: setup.player.actionLoadout.itemSlots.map(() => false),
       aiState: 'combat',
       defaultAiState: 'combat',
       alertRange: 0,
@@ -242,6 +255,18 @@ export class RealtimeCombatEngine {
     this.bodies.clear();
   }
 
+  usePlayerSkillSlot(slotIndex: number): void {
+    const skillId = this.player.skillSlots[slotIndex];
+    if (!skillId || this.result || this.player.hp <= 0) return;
+    if (skillId === 'heal') this.useHeal(this.player, skillById(skillId));
+  }
+
+  usePlayerItemSlot(slotIndex: number): void {
+    const itemId = this.player.itemSlots[slotIndex];
+    if (!itemId || this.result || this.player.hp <= 0 || this.player.itemUsed[slotIndex]) return;
+    this.useItem(this.player, itemId, slotIndex);
+  }
+
   step(input: InputState, dt: number): void {
     const safeDt = Math.min(dt, 1 / 30);
     this.tickTimers(safeDt);
@@ -255,6 +280,7 @@ export class RealtimeCombatEngine {
     this.syncPositions();
     if (!this.result) this.tickProjectiles(safeDt);
     else this.projectiles.length = 0;
+    if (!this.result) this.tickStatusEffects(safeDt);
     this.tickEffects(safeDt);
     this.checkBattleEnd();
   }
@@ -295,6 +321,9 @@ export class RealtimeCombatEngine {
     for (const combatant of this.combatants()) {
       for (const hand of combatant.hands) {
         hand.cooldown = Math.max(0, hand.cooldown - dt);
+      }
+      for (const skillId of combatant.skills) {
+        combatant.skillCooldowns[skillId] = Math.max(0, (combatant.skillCooldowns[skillId] ?? 0) - dt);
       }
       combatant.flash = Math.max(0, combatant.flash - dt);
     }
@@ -375,6 +404,7 @@ export class RealtimeCombatEngine {
     const dir = normalize(toTarget);
     const d = length(toTarget);
     actor.facing = Math.atan2(dir.y, dir.x);
+    if (this.tryUseSkill(actor, target, d)) return;
 
     if (this.hasProjectileAttack(actor)) {
       const definition = this.definitionFor(actor);
@@ -561,7 +591,7 @@ export class RealtimeCombatEngine {
     }
     for (let i = this.damageTexts.length - 1; i >= 0; i -= 1) {
       this.damageTexts[i].ttl -= dt;
-      this.damageTexts[i].position.y -= 28 * dt;
+      this.damageTexts[i].position.y -= 42 * dt;
       if (this.damageTexts[i].ttl <= 0) this.damageTexts.splice(i, 1);
     }
   }
@@ -572,16 +602,154 @@ export class RealtimeCombatEngine {
     this.impacts.push({ id: this.nextEffectId++, position: { ...position }, ttl: 0.18 });
   }
 
-  private addDamageText(position: Vec2, damage: number): void {
+  private addDamageText(position: Vec2, damage: number, opts: { color?: number; yOffset?: number; prefix?: string } = {}): void {
     this.damageTexts.push({
       id: this.nextEffectId++,
-      position: { x: position.x, y: position.y - 28 },
-      text: String(damage),
-      ttl: 0.72,
+      position: { x: position.x, y: position.y + (opts.yOffset ?? -28) },
+      text: `${opts.prefix ?? ''}${damage}`,
+      ttl: 1.25,
+      color: opts.color,
     });
   }
 
+  private tryUseSkill(attacker: Combatant, target: Combatant, distanceToTarget: number): boolean {
+    if (attacker.skills.includes('charge') && (attacker.skillCooldowns.charge ?? 0) === 0) {
+      const skill = skillById('charge');
+      if (distanceToTarget >= (skill.minRange ?? 0) && distanceToTarget <= (skill.maxRange ?? Infinity)) {
+        this.useCharge(attacker, target, skill);
+        return true;
+      }
+    }
+
+    if (attacker.skills.includes('bite') && (attacker.skillCooldowns.bite ?? 0) === 0) {
+      const skill = skillById('bite');
+      const hand = attacker.hands.find((item) => item.weapon.attackMode === 'melee') ?? attacker.hands[0];
+      if (hand && targetInMeleeRange(attacker, target, hand) && this.hasLineOfSight(attacker.position, target.position)) {
+        this.useBite(attacker, target, skill, hand);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private useCharge(attacker: Combatant, target: Combatant, skill: SkillDefinition): void {
+    const dir = normalize({
+      x: attacker.position.x - target.position.x,
+      y: attacker.position.y - target.position.y,
+    });
+    const stopDistance = attacker.radius + target.radius + 4;
+    this.moveBodyTo(attacker, {
+      x: target.position.x + dir.x * stopDistance,
+      y: target.position.y + dir.y * stopDistance,
+    });
+    attacker.facing = angleTo(attacker.position, target.position);
+    attacker.skillCooldowns.charge = skill.cooldown;
+    const hand = attacker.hands[0];
+    const damage = this.resolveAttackWithWeapon(attacker, target, hand?.weapon, hand?.side, skill.damageMultiplier, skill.name);
+    if (damage > 0) {
+      target.flash = 0.22;
+      this.addImpact(target.position);
+      this.addDamageText(target.position, damage);
+    }
+  }
+
+  private useBite(attacker: Combatant, target: Combatant, skill: SkillDefinition, hand: CombatHand): void {
+    attacker.skillCooldowns.bite = skill.cooldown;
+    const damage = this.resolveAttackWithWeapon(attacker, target, hand.weapon, hand.side, skill.damageMultiplier, skill.name);
+    if (damage > 0) {
+      target.flash = 0.22;
+      this.addImpact(target.position);
+      this.addDamageText(target.position, damage);
+      if (this.rng() < (skill.bleedChance ?? 0)) {
+        this.applyBleed(attacker, target, Math.max(1, Math.round(damage * (skill.bleedDamageRatio ?? 0))), skill);
+      }
+    }
+  }
+
+  private applyBleed(attacker: Combatant, target: Combatant, damagePerTick: number, skill: SkillDefinition): void {
+    this.statusEffects.push({
+      id: this.nextEffectId++,
+      statusId: 'bleed',
+      name: '出血',
+      sourceId: attacker.id,
+      targetId: target.id,
+      amountPerTick: damagePerTick,
+      effectType: 'damage',
+      remaining: skill.bleedDuration ?? 3,
+      tickInterval: skill.bleedTickInterval ?? 1,
+      tickTimer: skill.bleedTickInterval ?? 1,
+    });
+    this.pushStatusEvent(attacker, target, '出血', 'apply');
+  }
+
+  private useHeal(target: Combatant, skill: SkillDefinition): void {
+    if ((target.skillCooldowns.heal ?? 0) > 0 || target.mp < (skill.mpCost ?? 0)) return;
+    target.mp = Math.max(0, target.mp - (skill.mpCost ?? 0));
+    target.skillCooldowns.heal = skill.cooldown;
+    this.statusEffects.push({
+      id: this.nextEffectId++,
+      statusId: 'healing',
+      name: '治療術',
+      sourceId: target.id,
+      targetId: target.id,
+      amountPerTick: Math.max(1, Math.round(target.maxHp * (skill.healPerSecondRatio ?? 0))),
+      effectType: 'heal',
+      remaining: skill.healDuration ?? 16,
+      tickInterval: skill.healTickInterval ?? 1,
+      tickTimer: skill.healTickInterval ?? 1,
+    });
+    this.pushStatusEvent(target, target, '治療術', 'apply');
+  }
+
+  private useItem(target: Combatant, itemId: ItemId, slotIndex: number): void {
+    const item = itemById(itemId);
+    target.itemUsed[slotIndex] = true;
+    const heal = Math.max(1, Math.round(target.maxHp * item.healHpRatio));
+    const applied = Math.max(0, Math.min(heal, target.maxHp - target.hp));
+    target.hp = Math.min(target.maxHp, target.hp + heal);
+    this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
+    this.pushResourceEvent(target, target, 'hp', applied, item.name);
+  }
+
+  private tickStatusEffects(dt: number): void {
+    for (let i = this.statusEffects.length - 1; i >= 0; i -= 1) {
+      const effect = this.statusEffects[i];
+      const target = this.combatantById(effect.targetId);
+      const source = this.combatantById(effect.sourceId) ?? target;
+      if (!target || target.hp <= 0 || !source) {
+        this.statusEffects.splice(i, 1);
+        continue;
+      }
+      effect.tickTimer -= dt;
+      while (effect.tickTimer <= 0 && target.hp > 0) {
+        effect.tickTimer += effect.tickInterval;
+        target.flash = 0.18;
+        if (effect.effectType === 'damage') {
+          target.hp = Math.max(0, target.hp - effect.amountPerTick);
+          this.addDamageText(target.position, effect.amountPerTick, { color: 0xff5f5a, yOffset: -42, prefix: '-' });
+          this.pushDamageEvent(source, target, '命中', effect.amountPerTick, undefined, effect.name);
+          if (target.hp <= 0) this.pushDeathEvent(source, target);
+        } else {
+          const applied = Math.max(0, Math.min(effect.amountPerTick, target.maxHp - target.hp));
+          target.hp = Math.min(target.maxHp, target.hp + effect.amountPerTick);
+          this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
+          this.pushResourceEvent(source, target, 'hp', applied, effect.name);
+        }
+      }
+      effect.remaining -= dt;
+      if (effect.remaining <= 0 || target.hp <= 0) {
+        if (target.hp > 0) this.pushStatusEvent(source, target, effect.name, 'expire');
+        this.statusEffects.splice(i, 1);
+      }
+    }
+  }
+
   private resolveBasicAttackWithWeapon(attacker: Combatant, target: Combatant, weapon?: WeaponDefinition, hand?: CombatHandSide): number {
+    return this.resolveAttackWithWeapon(attacker, target, weapon, hand, 1, '普攻');
+  }
+
+  private resolveAttackWithWeapon(attacker: Combatant, target: Combatant, weapon: WeaponDefinition | undefined, hand: CombatHandSide | undefined, damageMultiplier: number, actionName: string): number {
     const table = buildAttackTable({
       attacker: attacker.attrs,
       defender: target.attrs,
@@ -594,7 +762,7 @@ export class RealtimeCombatEngine {
     });
     const outcome = rollOutcome(table, this.rng);
     const base = baseDamageWithWeapon(attacker, this.rng, weapon);
-    const result = resolveDamage(outcome, base, { armor: target.armor, reductionRate: target.reductionRate });
+    const result = resolveDamage(outcome, base, { armor: target.armor, reductionRate: target.reductionRate }, damageMultiplier);
     const damage = result.damage;
 
     if (damage > 0) {
@@ -603,10 +771,10 @@ export class RealtimeCombatEngine {
         if (target.faction === 'neutral') target.retaliationTargetId = attacker.id;
         if (this.canAttack(target, attacker)) target.aiState = 'combat';
       }
-      this.pushDamageEvent(attacker, target, outcome, damage, hand);
+      this.pushDamageEvent(attacker, target, outcome, damage, hand, actionName);
       if (target.hp <= 0) this.pushDeathEvent(attacker, target);
     } else {
-      this.pushMissEvent(attacker, target, outcome, hand);
+      this.pushMissEvent(attacker, target, outcome, hand, actionName);
     }
     return damage;
   }
@@ -730,28 +898,51 @@ export class RealtimeCombatEngine {
     };
   }
 
-  private pushDamageEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome, damage: number, hand?: CombatHandSide): void {
+  private pushDamageEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome, damage: number, hand?: CombatHandSide, actionName = '普攻'): void {
     this.onEvent?.({
       id: this.nextLogId++,
       kind: 'damage',
       source: this.actorRef(attacker),
       target: this.actorRef(target),
-      action: { kind: 'basicAttack', name: '普攻' },
+      action: { kind: 'basicAttack', name: actionName },
       amount: damage,
       outcome,
       hand,
     });
   }
 
-  private pushMissEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome, hand?: CombatHandSide): void {
+  private pushMissEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome, hand?: CombatHandSide, actionName = '普攻'): void {
     this.onEvent?.({
       id: this.nextLogId++,
       kind: 'miss',
       source: this.actorRef(attacker),
       target: this.actorRef(target),
-      action: { kind: 'basicAttack', name: '普攻' },
+      action: { kind: 'basicAttack', name: actionName },
       outcome,
       hand,
+    });
+  }
+
+  private pushStatusEvent(source: Combatant, target: Combatant, statusName: string, statusAction: 'apply' | 'expire' | 'resist'): void {
+    this.onEvent?.({
+      id: this.nextLogId++,
+      kind: 'status',
+      source: this.actorRef(source),
+      target: this.actorRef(target),
+      statusName,
+      statusAction,
+    });
+  }
+
+  private pushResourceEvent(source: Combatant, target: Combatant, resource: 'hp' | 'mp', amount: number, actionName: string): void {
+    this.onEvent?.({
+      id: this.nextLogId++,
+      kind: 'resource',
+      source: this.actorRef(source),
+      target: this.actorRef(target),
+      action: { kind: 'basicAttack', name: actionName },
+      resource,
+      amount,
     });
   }
 

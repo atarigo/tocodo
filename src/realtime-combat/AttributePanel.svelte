@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ATTR_KEYS, ATTR_NAMES, type Attributes, type BattleSetup, type DifficultyRank, type EnemySpawn, type EquipmentDefinition, type EquipmentLoadout, type EquipmentSlot, type WeaponDefinition } from './types.js';
+  import { ATTR_KEYS, ATTR_NAMES, type ActionLoadout, type Attributes, type BattleSetup, type DifficultyRank, type EnemySpawn, type EquipmentDefinition, type EquipmentLoadout, type EquipmentSlot, type ItemId, type SkillId, type WeaponDefinition } from './types.js';
   import { attackInterval, maxHp, maxMp } from './formulas.js';
   import {
     EQUIPMENT_SLOT_LABELS,
@@ -11,20 +11,24 @@
     normalizeLoadout,
   } from './equipmentCatalog.js';
   import { DIFFICULTY_LABELS, DIFFICULTY_RANKS } from './enemyScaling.js';
+  import { ITEMS, itemById } from './itemCatalog.js';
+  import { SKILLS, skillById } from './skillCatalog.js';
 
   let {
     playerAttrs = $bindable(),
     enemyDifficulty = $bindable(),
     playerLoadout = $bindable(),
+    actionLoadout = $bindable(),
     battleSetup,
   }: {
     playerAttrs: Attributes;
     enemyDifficulty: DifficultyRank;
     playerLoadout: EquipmentLoadout;
+    actionLoadout: ActionLoadout;
     battleSetup: BattleSetup | null;
   } = $props();
 
-  let activeTab = $state<'attrs' | 'equipment'>('attrs');
+  let activeTab = $state<'attrs' | 'equipment' | 'actions'>('attrs');
   const normalizedLoadout = $derived(normalizeLoadout(playerLoadout));
   const selectedWeapon = $derived(getWeapon(normalizedLoadout));
   const selectedOffhandWeapon = $derived(getOffhandWeapon(normalizedLoadout));
@@ -44,6 +48,18 @@
 
   function itemName(id: string | null): string {
     return id ? getEquipment(id).name : '無';
+  }
+
+  function updateSkillSlot(index: number, id: string): void {
+    const skillSlots = [...actionLoadout.skillSlots];
+    skillSlots[index] = id === '' ? null : (id as SkillId);
+    actionLoadout = { ...actionLoadout, skillSlots };
+  }
+
+  function updateItemSlot(index: number, id: string): void {
+    const itemSlots = [...actionLoadout.itemSlots];
+    itemSlots[index] = id === '' ? null : (id as ItemId);
+    actionLoadout = { ...actionLoadout, itemSlots };
   }
 
   function isWeapon(item: EquipmentDefinition | null): item is WeaponDefinition {
@@ -83,6 +99,7 @@
 <div class="tabs">
   <button class:active={activeTab === 'attrs'} onclick={() => (activeTab = 'attrs')}>屬性</button>
   <button class:active={activeTab === 'equipment'} onclick={() => (activeTab = 'equipment')}>裝備</button>
+  <button class:active={activeTab === 'actions'} onclick={() => (activeTab = 'actions')}>快捷</button>
 </div>
 
 {#if activeTab === 'attrs'}
@@ -275,6 +292,48 @@
       </div>
     </section>
   </div>
+{:else if activeTab === 'actions'}
+  <div class="actions-page">
+    <section class="panel-section">
+      <h2>技能欄</h2>
+      {#each Array(5) as _, index}
+        <label class="equip-row">
+          <span>{index + 1}</span>
+          <select value={actionLoadout.skillSlots[index] ?? ''} onchange={(event) => updateSkillSlot(index, event.currentTarget.value)}>
+            <option value="">空</option>
+            {#each Object.values(SKILLS).filter((skill) => skill.id === 'heal') as skill (skill.id)}
+              <option value={skill.id}>{skill.name}</option>
+            {/each}
+          </select>
+        </label>
+      {/each}
+    </section>
+
+    <section class="panel-section">
+      <h2>道具欄</h2>
+      {#each Array(2) as _, index}
+        <label class="equip-row">
+          <span>{index === 0 ? 'Q' : 'E'}</span>
+          <select value={actionLoadout.itemSlots[index] ?? ''} onchange={(event) => updateItemSlot(index, event.currentTarget.value)}>
+            <option value="">空</option>
+            {#each Object.values(ITEMS) as item (item.id)}
+              <option value={item.id}>{item.name}</option>
+            {/each}
+          </select>
+        </label>
+      {/each}
+    </section>
+
+    <section class="panel-section">
+      <h2>效果摘要</h2>
+      <div class="summary-list">
+        <div><span>{skillById('heal').name}</span><strong>每秒 2% HP / 16s</strong></div>
+        <div><span>消耗</span><strong>MP 2 / CD 20s</strong></div>
+        <div><span>{itemById('smallHealthPotion').name}</span><strong>恢復 25% HP</strong></div>
+        <div><span>使用</span><strong>一次戰鬥一次</strong></div>
+      </div>
+    </section>
+  </div>
 {/if}
 
 <style>
@@ -296,7 +355,8 @@
   }
 
   .attr-page,
-  .equipment-page {
+  .equipment-page,
+  .actions-page {
     display: flex;
     flex-direction: column;
     gap: 18px;
