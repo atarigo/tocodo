@@ -1,6 +1,6 @@
 <script lang="ts">
   import { navigate } from '../web/router.svelte.js';
-  import type { Attributes, CombatEvent } from './types.js';
+  import type { Attributes, BattleResult, CombatEvent } from './types.js';
   import AttributePanel from './AttributePanel.svelte';
   import RealtimeCombatStage from './RealtimeCombatStage.svelte';
 
@@ -9,14 +9,17 @@
   let enemyAttrs = $state<Attributes>({ str: 8, vit: 8, agi: 8, dex: 8, wil: 6, luk: 6 });
   let sessionId = $state(0);
   let started = $state(false);
+  let battleResult = $state<BattleResult | null>(null);
 
   function addEvent(event: CombatEvent): void {
     events.unshift(event);
     if (events.length > 120) events.length = 120;
+    if (event.kind === 'battleEnd') battleResult = event.result;
   }
 
   function startGame(): void {
     events = [];
+    battleResult = null;
     started = true;
     sessionId += 1;
   }
@@ -33,6 +36,8 @@
         return `${event.target.name} ${event.resource} ${event.amount}`;
       case 'death':
         return `${event.target.name} 倒下`;
+      case 'battleEnd':
+        return event.result === 'playerWon' ? '戰鬥結束：玩家勝利' : '戰鬥結束：玩家失敗';
       default:
         return '';
     }
@@ -53,6 +58,12 @@
       {#key sessionId}
         <RealtimeCombatStage onEvent={addEvent} {playerAttrs} {enemyAttrs} {sessionId} />
       {/key}
+      {#if battleResult}
+        <div class="result-panel">
+          <div class="result-title">{battleResult === 'playerWon' ? '勝利' : '失敗'}</div>
+          <button class="primary" onclick={startGame}>重新開始</button>
+        </div>
+      {/if}
     {:else}
       <div class="start-panel">
         <button class="primary" onclick={startGame}>開始遊戲</button>
@@ -124,6 +135,26 @@
   .stage-actions button {
     background: rgba(42, 45, 57, 0.88);
     backdrop-filter: blur(4px);
+  }
+
+  .result-panel {
+    position: absolute;
+    inset: 12px;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: rgba(17, 19, 26, 0.72);
+    backdrop-filter: blur(3px);
+    border-radius: 6px;
+  }
+
+  .result-title {
+    color: var(--text);
+    font-size: 32px;
+    font-weight: 700;
   }
 
   .realtime-log {

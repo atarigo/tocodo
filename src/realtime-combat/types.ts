@@ -87,7 +87,8 @@ export interface DamageText {
 
 export type CombatSide = 'player' | 'enemy';
 export type CombatActionKind = 'basicAttack';
-export type CombatEventKind = 'damage' | 'miss' | 'status' | 'resource' | 'death';
+export type CombatEventKind = 'damage' | 'miss' | 'status' | 'resource' | 'death' | 'battleEnd';
+export type BattleResult = 'playerWon' | 'playerLost';
 
 export interface CombatActorRef {
   id: number;
@@ -139,7 +140,12 @@ export interface DeathEvent extends CombatEventBase {
   target: CombatActorRef;
 }
 
-export type CombatEvent = DamageEvent | MissEvent | StatusEvent | ResourceEvent | DeathEvent;
+export interface BattleEndEvent extends CombatEventBase {
+  kind: 'battleEnd';
+  result: BattleResult;
+}
+
+export type CombatEvent = DamageEvent | MissEvent | StatusEvent | ResourceEvent | DeathEvent | BattleEndEvent;
 
 export interface InputState {
   move: Vec2;

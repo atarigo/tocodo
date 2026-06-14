@@ -2,7 +2,7 @@ import Matter from 'matter-js';
 import { buildAttackTable, resolveDamage, rollOutcome, type AttackOutcome } from './attackTable.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
 import { createRng, type Rng } from './rng.js';
-import type { Attributes, CombatActorRef, CombatEvent, Combatant, DamageText, Impact, InputState, Projectile, Strike, Vec2 } from './types.js';
+import type { Attributes, BattleResult, CombatActorRef, CombatEvent, Combatant, DamageText, Impact, InputState, Projectile, Strike, Vec2 } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
@@ -72,6 +72,7 @@ export class RealtimeCombatEngine {
   private nextEffectId = 1;
   private nextProjectileId = 1;
   private nextLogId = 1;
+  private result: BattleResult | null = null;
 
   constructor(opts: { seed?: number; onEvent?: (event: CombatEvent) => void; playerAttrs?: Attributes; enemyAttrs?: Attributes } = {}) {
     this.rng = createRng(opts.seed ?? Date.now());
@@ -167,12 +168,18 @@ export class RealtimeCombatEngine {
   step(input: InputState, dt: number): void {
     const safeDt = Math.min(dt, 1 / 30);
     this.tickTimers(safeDt);
-    this.updatePlayer(input);
-    this.updateEnemies();
+    if (!this.result) {
+      this.updatePlayer(input);
+      this.updateEnemies();
+    } else {
+      this.stopBodies();
+    }
     Matter.Engine.update(this.matter, safeDt * 1000);
     this.syncPositions();
-    this.tickProjectiles(safeDt);
+    if (!this.result) this.tickProjectiles(safeDt);
+    else this.projectiles.length = 0;
     this.tickEffects(safeDt);
+    this.checkBattleEnd();
   }
 
   private addWalls(): void {
@@ -253,6 +260,11 @@ export class RealtimeCombatEngine {
         y: velocity.y / MATTER_TICKS_PER_SECOND,
       });
     }
+  }
+
+  private stopBodies(): void {
+    this.setVelocity(this.player, { x: 0, y: 0 });
+    for (const enemy of this.enemies) this.setVelocity(enemy, { x: 0, y: 0 });
   }
 
   private syncPositions(): void {
@@ -402,6 +414,17 @@ export class RealtimeCombatEngine {
     return damage;
   }
 
+  private checkBattleEnd(): void {
+    if (this.result) return;
+    if (this.player.hp <= 0) {
+      this.finishBattle('playerLost', this.enemies.find((enemy) => enemy.hp > 0) ?? this.player);
+      return;
+    }
+    if (this.enemies.every((enemy) => enemy.hp <= 0)) {
+      this.finishBattle('playerWon', this.player);
+    }
+  }
+
   private actorRef(combatant: Combatant): CombatActorRef {
     return {
       id: combatant.id,
@@ -439,6 +462,17 @@ export class RealtimeCombatEngine {
       kind: 'death',
       source: this.actorRef(attacker),
       target: this.actorRef(target),
+    });
+  }
+
+  private finishBattle(result: BattleResult, source: Combatant): void {
+    this.result = result;
+    this.stopBodies();
+    this.onEvent?.({
+      id: this.nextLogId++,
+      kind: 'battleEnd',
+      source: this.actorRef(source),
+      result,
     });
   }
 }
