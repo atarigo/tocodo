@@ -5,6 +5,7 @@ export interface Vec2 {
 
 export type CombatantKind = 'player' | 'meleeEnemy' | 'rangedEnemy';
 export type CombatFaction = 'player' | 'enemy' | 'ally' | 'neutral';
+export type AiState = 'guard' | 'patrol' | 'combat' | 'returning';
 export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
 export type AttackMode = 'melee' | 'projectile';
 export type AmmoType = 'arrow' | 'bullet';
@@ -50,6 +51,7 @@ export interface Combatant {
   radius: number;
   color: number;
   position: Vec2;
+  homePosition: Vec2;
   facing: number;
   speed: number;
   hp: number;
@@ -63,6 +65,10 @@ export interface Combatant {
   flash: number;
   bodyId: number | null;
   hands: CombatHand[];
+  aiState: AiState;
+  defaultAiState: AiState;
+  alertRange: number;
+  leashRange: number;
   retaliationTargetId?: number;
 }
 
@@ -130,6 +136,9 @@ export interface EnemyDefinition {
   color: number;
   speed: number;
   preferredRange?: number;
+  aiState?: AiState;
+  alertRange?: number;
+  leashRange?: number;
   armor: number;
   reductionRate: number;
   parryRate: number;
@@ -143,6 +152,9 @@ export interface EnemySpawn {
   facing?: number;
   name?: string;
   attrs?: Attributes;
+  aiState?: AiState;
+  alertRange?: number;
+  leashRange?: number;
 }
 
 export interface ArenaObstacle {

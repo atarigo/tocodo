@@ -6,7 +6,7 @@ import { enemyById } from './enemyCatalog.js';
 import { equipmentDefense, getOffhandWeapon, getWeapon, normalizeLoadout } from './equipmentCatalog.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
 import { createRng, type Rng } from './rng.js';
-import type { ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2, WeaponDefinition } from './types.js';
+import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
@@ -17,6 +17,9 @@ const BASIC_DAMAGE: [number, number] = [4, 8];
 const BASIC_BALANCE = 0.55;
 const BASIC_RANGE = 88;
 const BASIC_ARC = Math.PI / 2;
+const DEFAULT_ALERT_RANGE = 230;
+const DEFAULT_LEASH_RANGE = 420;
+const RETURN_DISTANCE = 8;
 
 function length(v: Vec2): number {
   return Math.hypot(v.x, v.y);
@@ -124,6 +127,7 @@ function makeEnemy(
     radius: definition.radius,
     color: definition.color,
     position: { ...spawn.position },
+    homePosition: { ...spawn.position },
     facing: spawn.facing ?? 0,
     speed: definition.speed,
     armor: definition.armor + defense.armor,
@@ -131,6 +135,10 @@ function makeEnemy(
     parryRate: Math.min(1, definition.parryRate + defense.parryRate),
     blockRate: Math.min(1, definition.blockRate + defense.blockRate),
     hands,
+    aiState: spawn.aiState ?? definition.aiState ?? 'guard',
+    defaultAiState: spawn.aiState ?? definition.aiState ?? 'guard',
+    alertRange: spawn.alertRange ?? definition.alertRange ?? DEFAULT_ALERT_RANGE,
+    leashRange: spawn.leashRange ?? definition.leashRange ?? DEFAULT_LEASH_RANGE,
   });
 }
 
@@ -204,6 +212,7 @@ export class RealtimeCombatEngine {
       radius: 17,
       color: 0x5b8def,
       position: { ...setup.player.position },
+      homePosition: { ...setup.player.position },
       facing: setup.player.facing,
       speed: 230,
       armor: playerDefense.armor,
@@ -211,6 +220,10 @@ export class RealtimeCombatEngine {
       parryRate: playerDefense.parryRate,
       blockRate: playerDefense.blockRate,
       hands: playerHands,
+      aiState: 'combat',
+      defaultAiState: 'combat',
+      alertRange: 0,
+      leashRange: 0,
     });
 
     let nextActorId = 2;
@@ -301,39 +314,86 @@ export class RealtimeCombatEngine {
         this.setVelocity(actor, { x: 0, y: 0 });
         continue;
       }
-      const target = this.targetFor(actor);
-      if (!target) {
-        this.setVelocity(actor, { x: 0, y: 0 });
+
+      if (actor.aiState === 'guard' || actor.aiState === 'patrol') {
+        this.updateGuardState(actor);
         continue;
       }
 
-      const toTarget = {
-        x: target.position.x - actor.position.x,
-        y: target.position.y - actor.position.y,
-      };
-      const dir = normalize(toTarget);
-      const d = length(toTarget);
-      actor.facing = Math.atan2(dir.y, dir.x);
-
-      if (this.hasProjectileAttack(actor)) {
-        const definition = this.definitionFor(actor);
-        const preferred = definition.preferredRange ?? 170;
-        const moveSign = d < preferred ? -1 : 1;
-        const shouldMove = Math.abs(d - preferred) > 26;
-        this.setVelocity(actor, shouldMove ? { x: dir.x * actor.speed * moveSign, y: dir.y * actor.speed * moveSign } : { x: 0, y: 0 });
-        if (d <= this.maxAttackRange(actor) && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
-      } else {
-        const holdDistance = this.maxAttackRange(actor) + target.radius - 8;
-        this.setVelocity(actor, d > holdDistance ? { x: dir.x * actor.speed, y: dir.y * actor.speed } : { x: 0, y: 0 });
-        if (d <= this.maxAttackRange(actor) + target.radius && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
+      if (actor.aiState === 'returning') {
+        this.updateReturningState(actor);
+        continue;
       }
 
-      if (distance(actor.position, target.position) <= actor.radius + target.radius + 2) {
-        this.addImpact({
-          x: (actor.position.x + target.position.x) / 2,
-          y: (actor.position.y + target.position.y) / 2,
-        });
-      }
+      this.updateCombatState(actor);
+    }
+  }
+
+  private updateGuardState(actor: Combatant): void {
+    this.setVelocity(actor, { x: 0, y: 0 });
+    const target = this.alertTargetFor(actor);
+    if (target) {
+      actor.aiState = 'combat';
+      actor.facing = angleTo(actor.position, target.position);
+    }
+  }
+
+  private updateReturningState(actor: Combatant): void {
+    actor.retaliationTargetId = undefined;
+    const toHome = {
+      x: actor.homePosition.x - actor.position.x,
+      y: actor.homePosition.y - actor.position.y,
+    };
+    const d = length(toHome);
+    if (d <= RETURN_DISTANCE) {
+      this.moveBodyTo(actor, actor.homePosition);
+      actor.aiState = actor.defaultAiState === 'patrol' ? 'patrol' : 'guard';
+      this.setVelocity(actor, { x: 0, y: 0 });
+      return;
+    }
+    const dir = normalize(toHome);
+    actor.facing = Math.atan2(dir.y, dir.x);
+    this.setVelocity(actor, { x: dir.x * actor.speed, y: dir.y * actor.speed });
+  }
+
+  private updateCombatState(actor: Combatant): void {
+    if (distance(actor.position, actor.homePosition) > actor.leashRange) {
+      actor.aiState = 'returning';
+      return;
+    }
+
+    const target = this.targetFor(actor);
+    if (!target) {
+      actor.aiState = 'returning';
+      return;
+    }
+
+    const toTarget = {
+      x: target.position.x - actor.position.x,
+      y: target.position.y - actor.position.y,
+    };
+    const dir = normalize(toTarget);
+    const d = length(toTarget);
+    actor.facing = Math.atan2(dir.y, dir.x);
+
+    if (this.hasProjectileAttack(actor)) {
+      const definition = this.definitionFor(actor);
+      const preferred = definition.preferredRange ?? 170;
+      const moveSign = d < preferred ? -1 : 1;
+      const shouldMove = Math.abs(d - preferred) > 26;
+      this.setVelocity(actor, shouldMove ? { x: dir.x * actor.speed * moveSign, y: dir.y * actor.speed * moveSign } : { x: 0, y: 0 });
+      if (d <= this.maxAttackRange(actor) && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
+    } else {
+      const holdDistance = this.maxAttackRange(actor) + target.radius - 8;
+      this.setVelocity(actor, d > holdDistance ? { x: dir.x * actor.speed, y: dir.y * actor.speed } : { x: 0, y: 0 });
+      if (d <= this.maxAttackRange(actor) + target.radius && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
+    }
+
+    if (distance(actor.position, target.position) <= actor.radius + target.radius + 2) {
+      this.addImpact({
+        x: (actor.position.x + target.position.x) / 2,
+        y: (actor.position.y + target.position.y) / 2,
+      });
     }
   }
 
@@ -349,6 +409,14 @@ export class RealtimeCombatEngine {
         y: velocity.y / MATTER_TICKS_PER_SECOND,
       });
     }
+  }
+
+  private moveBodyTo(combatant: Combatant, position: Vec2): void {
+    const body = this.bodies.get(combatant.id);
+    if (!body) return;
+    if (body.isStatic) Matter.Body.setStatic(body, false);
+    Matter.Body.setPosition(body, position);
+    combatant.position = { ...position };
   }
 
   private stopBodies(): void {
@@ -531,7 +599,10 @@ export class RealtimeCombatEngine {
 
     if (damage > 0) {
       target.hp = Math.max(0, target.hp - damage);
-      if (target.faction === 'neutral' && target.hp > 0) target.retaliationTargetId = attacker.id;
+      if (target.hp > 0 && target.faction !== 'player') {
+        if (target.faction === 'neutral') target.retaliationTargetId = attacker.id;
+        if (this.canAttack(target, attacker)) target.aiState = 'combat';
+      }
       this.pushDamageEvent(attacker, target, outcome, damage, hand);
       if (target.hp <= 0) this.pushDeathEvent(attacker, target);
     } else {
@@ -607,6 +678,26 @@ export class RealtimeCombatEngine {
       const target = targets.find((candidate) => candidate.id === attacker.retaliationTargetId) ?? null;
       if (!target) attacker.retaliationTargetId = undefined;
       return target;
+    }
+    let nearest: Combatant | null = null;
+    let nearestDistance = Infinity;
+    for (const target of targets) {
+      const d = distance(attacker.position, target.position);
+      if (d < nearestDistance) {
+        nearest = target;
+        nearestDistance = d;
+      }
+    }
+    return nearest;
+  }
+
+  private alertTargetFor(attacker: Combatant): Combatant | null {
+    if (attacker.faction === 'neutral' && !attacker.retaliationTargetId) return null;
+    const targets = this.attackableTargetsFor(attacker).filter(
+      (target) => distance(attacker.homePosition, target.position) <= attacker.alertRange,
+    );
+    if (attacker.faction === 'neutral') {
+      return targets.find((candidate) => candidate.id === attacker.retaliationTargetId) ?? null;
     }
     let nearest: Combatant | null = null;
     let nearestDistance = Infinity;
