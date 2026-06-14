@@ -1,16 +1,20 @@
 <script lang="ts">
   import { ATTR_KEYS, ATTR_NAMES, type Attributes } from './types.js';
   import { maxHp, maxMp } from './formulas.js';
+  import { getWeapon, WEAPONS } from './weaponCatalog.js';
 
   let {
     playerAttrs = $bindable(),
     enemyAttrs = $bindable(),
+    weaponId = $bindable(),
   }: {
     playerAttrs: Attributes;
     enemyAttrs: Attributes;
+    weaponId: string;
   } = $props();
 
-  let activeTab = $state<'attrs'>('attrs');
+  let activeTab = $state<'attrs' | 'weapon'>('attrs');
+  const selectedWeapon = $derived(getWeapon(weaponId));
 
   function updateAttr(target: 'player' | 'enemy', key: keyof Attributes, value: number): void {
     const next = Math.max(0, Math.min(255, Math.round(value)));
@@ -21,6 +25,7 @@
 
 <div class="tabs">
   <button class:active={activeTab === 'attrs'} onclick={() => (activeTab = 'attrs')}>屬性</button>
+  <button class:active={activeTab === 'weapon'} onclick={() => (activeTab = 'weapon')}>武器</button>
 </div>
 
 {#if activeTab === 'attrs'}
@@ -79,6 +84,26 @@
       {/each}
     </section>
   </div>
+{:else if activeTab === 'weapon'}
+  <div class="weapon-page">
+    <section class="attr-section">
+      <h2>玩家武器</h2>
+      <select bind:value={weaponId}>
+        {#each WEAPONS as weapon (weapon.id)}
+          <option value={weapon.id}>{weapon.name}</option>
+        {/each}
+      </select>
+
+      <div class="weapon-stats">
+        <div><span>傷害</span><strong>{selectedWeapon.damage[0]} - {selectedWeapon.damage[1]}</strong></div>
+        <div><span>平衡</span><strong>{Math.round(selectedWeapon.balance * 100)}%</strong></div>
+        <div><span>間隔</span><strong>{selectedWeapon.interval.toFixed(1)}s</strong></div>
+        <div><span>範圍</span><strong>{selectedWeapon.range}</strong></div>
+        <div><span>角度</span><strong>{Math.round((selectedWeapon.arc * 180) / Math.PI)}°</strong></div>
+        <div><span>招架</span><strong>{Math.round(selectedWeapon.parryRate * 100)}%</strong></div>
+      </div>
+    </section>
+  </div>
 {/if}
 
 <style>
@@ -99,11 +124,46 @@
     color: var(--accent-2);
   }
 
-  .attr-page {
+  .attr-page,
+  .weapon-page {
     display: flex;
     flex-direction: column;
     gap: 18px;
     padding: 12px;
+  }
+
+  .weapon-page select {
+    width: 100%;
+    background: #15161c;
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    border-radius: 5px;
+    padding: 6px 8px;
+  }
+
+  .weapon-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 12px;
+    margin-top: 12px;
+    font-size: 12px;
+  }
+
+  .weapon-stats div {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 4px;
+  }
+
+  .weapon-stats span {
+    color: var(--muted);
+  }
+
+  .weapon-stats strong {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
 
   .attr-section h2 {

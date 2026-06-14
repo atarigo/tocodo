@@ -4,8 +4,9 @@ import { createDefaultBattleSetup } from './battleSetup.js';
 import { enemyById } from './enemyCatalog.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
 import { createRng, type Rng } from './rng.js';
-import type { Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2 } from './types.js';
+import type { Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
+import { getWeapon } from './weaponCatalog.js';
 
 const WALL_THICKNESS = 64;
 const PLAYER_ID = 1;
@@ -13,6 +14,8 @@ const MATTER_TICKS_PER_SECOND = 60;
 const BASE_ATTACK_INTERVAL = 0.82;
 const BASIC_DAMAGE: [number, number] = [4, 8];
 const BASIC_BALANCE = 0.55;
+const BASIC_RANGE = 88;
+const BASIC_ARC = Math.PI / 2;
 
 function length(v: Vec2): number {
   return Math.hypot(v.x, v.y);
@@ -44,6 +47,14 @@ function makeCombatant(
   return { ...params, hp, maxHp: hp, mp, maxMp: mp, cooldown: 0, flash: 0, bodyId: null };
 }
 
+function attackRangeOf(combatant: Combatant): number {
+  return combatant.weapon?.range ?? BASIC_RANGE;
+}
+
+function attackArcOf(combatant: Combatant): number {
+  return combatant.weapon?.arc ?? BASIC_ARC;
+}
+
 function cloneAttrs(attrs: Attributes): Attributes {
   return { ...attrs };
 }
@@ -71,6 +82,18 @@ function makeEnemy(id: number, definition: EnemyDefinition, spawn: EnemySpawn, a
   });
 }
 
+function baseDamage(attacker: Combatant, rng: Rng): number {
+  const weapon = attacker.weapon;
+  if (!weapon) {
+    const balance = effectiveBalance(BASIC_BALANCE, attacker.attrs.dex);
+    return balanceRoll(rng, BASIC_DAMAGE[0], BASIC_DAMAGE[1], balance) + attacker.attrs.str;
+  }
+
+  const balance = effectiveBalance(weapon.balance, weapon.dexAmp ? attacker.attrs.dex : 0);
+  const rolled = balanceRoll(rng, weapon.damage[0], weapon.damage[1], balance);
+  return rolled + (weapon.strApplies ? attacker.attrs.str : 0);
+}
+
 export class RealtimeCombatEngine {
   readonly player: Combatant;
   readonly enemies: Combatant[];
@@ -92,6 +115,7 @@ export class RealtimeCombatEngine {
     this.rng = createRng(opts.seed ?? Date.now());
     this.onEvent = opts.onEvent;
     const setup = opts.setup ?? createDefaultBattleSetup();
+    const playerWeapon = getWeapon(setup.player.weaponId);
     this.player = makeCombatant({
       id: PLAYER_ID,
       kind: 'player',
@@ -102,13 +126,14 @@ export class RealtimeCombatEngine {
       position: { ...setup.player.position },
       facing: setup.player.facing,
       speed: 230,
-      attackRange: 88,
-      attackArc: Math.PI / 2,
-      attackCooldown: attackInterval(BASE_ATTACK_INTERVAL, setup.player.attrs.agi),
+      attackRange: playerWeapon.range,
+      attackArc: playerWeapon.arc,
+      attackCooldown: attackInterval(playerWeapon.interval, setup.player.attrs.agi, playerWeapon.agiApplies),
       armor: 0,
       reductionRate: 0,
-      parryRate: 0,
+      parryRate: playerWeapon.parryRate,
       blockRate: 0,
+      weapon: playerWeapon,
     });
 
     this.enemies = setup.enemies.map((spawn, index) =>
@@ -242,7 +267,9 @@ export class RealtimeCombatEngine {
       if (target.hp <= 0) continue;
       const d = distance(attacker.position, target.position) - attacker.radius - target.radius;
       const targetAngle = angleTo(attacker.position, target.position);
-      if (d <= attacker.attackRange && angleDelta(attacker.facing, targetAngle) <= attacker.attackArc / 2) {
+      const range = attackRangeOf(attacker);
+      const arc = attackArcOf(attacker);
+      if (d <= range && angleDelta(attacker.facing, targetAngle) <= arc / 2) {
         const damage = this.resolveBasicAttack(attacker, target);
         if (damage > 0) {
           target.flash = 0.22;
@@ -258,8 +285,8 @@ export class RealtimeCombatEngine {
       id: this.nextEffectId++,
       position: { ...attacker.position },
       angle: attacker.facing,
-      range: attacker.attackRange,
-      arc: attacker.attackArc,
+      range: attackRangeOf(attacker),
+      arc: attackArcOf(attacker),
       ttl: hit ? 0.2 : 0.16,
       color: attacker.color,
       style,
@@ -361,8 +388,7 @@ export class RealtimeCombatEngine {
       canBeBlocked: true,
     });
     const outcome = rollOutcome(table, this.rng);
-    const balance = effectiveBalance(BASIC_BALANCE, attacker.attrs.dex);
-    const base = balanceRoll(this.rng, BASIC_DAMAGE[0], BASIC_DAMAGE[1], balance) + attacker.attrs.str;
+    const base = baseDamage(attacker, this.rng);
     const result = resolveDamage(outcome, base, { armor: target.armor, reductionRate: target.reductionRate });
     const damage = result.damage;
 

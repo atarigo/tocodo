@@ -10,11 +10,13 @@
     onEvent,
     playerAttrs,
     enemyAttrs,
+    weaponId,
     sessionId,
   }: {
     onEvent?: (event: CombatEvent) => void;
     playerAttrs: Attributes;
     enemyAttrs: Attributes;
+    weaponId: string;
     sessionId: number;
   } = $props();
 
@@ -168,7 +170,7 @@
     const localEngine = new RealtimeCombatEngine({
       seed: sessionId,
       onEvent,
-      setup: createDefaultBattleSetup(playerAttrs),
+      setup: createDefaultBattleSetup(playerAttrs, weaponId),
       enemyAttrsOverride: enemyAttrs,
     });
     engine = localEngine;

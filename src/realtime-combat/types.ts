@@ -4,6 +4,7 @@ export interface Vec2 {
 }
 
 export type CombatantKind = 'player' | 'meleeEnemy' | 'rangedEnemy';
+export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
 
 /** 六主屬性：範圍 0〜255、起始 10；沒有預設數值，基本狀態全由屬性或裝備提供 */
 export interface Attributes {
@@ -51,6 +52,22 @@ export interface Combatant {
   blockRate: number;
   flash: number;
   bodyId: number | null;
+  weapon?: WeaponDefinition;
+}
+
+export interface WeaponDefinition {
+  id: string;
+  name: string;
+  kind: WeaponKind;
+  damage: [number, number];
+  balance: number;
+  interval: number;
+  range: number;
+  arc: number;
+  strApplies: boolean;
+  agiApplies: boolean;
+  dexAmp: boolean;
+  parryRate: number;
 }
 
 export interface EnemyDefinition {
@@ -82,6 +99,7 @@ export interface BattleSetup {
   player: {
     name: string;
     attrs: Attributes;
+    weaponId: string;
     position: Vec2;
     facing: number;
   };

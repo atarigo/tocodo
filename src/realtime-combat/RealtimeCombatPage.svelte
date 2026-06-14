@@ -3,10 +3,12 @@
   import type { Attributes, BattleResult, CombatEvent } from './types.js';
   import AttributePanel from './AttributePanel.svelte';
   import RealtimeCombatStage from './RealtimeCombatStage.svelte';
+  import { DEFAULT_WEAPON_ID } from './weaponCatalog.js';
 
   let events = $state<CombatEvent[]>([]);
   let playerAttrs = $state<Attributes>({ str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 });
   let enemyAttrs = $state<Attributes>({ str: 8, vit: 8, agi: 8, dex: 8, wil: 6, luk: 6 });
+  let weaponId = $state(DEFAULT_WEAPON_ID);
   let sessionId = $state(0);
   let started = $state(false);
   let battleResult = $state<BattleResult | null>(null);
@@ -27,7 +29,7 @@
   function eventText(event: CombatEvent): string {
     switch (event.kind) {
       case 'damage':
-        return `${event.source.name} 使用 ${event.action?.name ?? '動作'} 造成 ${event.target.name} ${event.amount} 點傷害`;
+        return `${event.source.name} 使用 ${event.action?.name ?? '動作'} 造成 ${event.target.name} ${event.amount} 點傷害${event.outcome === '暴擊' ? ' [暴擊]' : ''}`;
       case 'miss':
         return `${event.source.name} 使用 ${event.action?.name ?? '動作'}，${event.target.name} ${event.outcome}`;
       case 'status':
@@ -51,12 +53,12 @@
 
 <main class="realtime-layout">
   <aside class="realtime-left">
-    <AttributePanel bind:playerAttrs bind:enemyAttrs />
+    <AttributePanel bind:playerAttrs bind:enemyAttrs bind:weaponId />
   </aside>
   <section class="realtime-center">
     {#if started}
       {#key sessionId}
-        <RealtimeCombatStage onEvent={addEvent} {playerAttrs} {enemyAttrs} {sessionId} />
+        <RealtimeCombatStage onEvent={addEvent} {playerAttrs} {enemyAttrs} {weaponId} {sessionId} />
       {/key}
       {#if battleResult}
         <div class="result-panel">
