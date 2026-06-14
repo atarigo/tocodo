@@ -40,6 +40,45 @@ function angleDelta(a: number, b: number): number {
   return Math.abs(((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
 }
 
+function segmentIntersectsRect(from: Vec2, to: Vec2, rect: ArenaObstacle): boolean {
+  const minX = rect.position.x - rect.width / 2;
+  const maxX = rect.position.x + rect.width / 2;
+  const minY = rect.position.y - rect.height / 2;
+  const maxY = rect.position.y + rect.height / 2;
+
+  if (pointInRect(from, minX, maxX, minY, maxY) || pointInRect(to, minX, maxX, minY, maxY)) return true;
+
+  const corners = [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+  ];
+  return corners.some((corner, index) => segmentsIntersect(from, to, corner, corners[(index + 1) % corners.length]));
+}
+
+function pointInRect(point: Vec2, minX: number, maxX: number, minY: number, maxY: number): boolean {
+  return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
+}
+
+function segmentsIntersect(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const acx = c.x - a.x;
+  const acy = c.y - a.y;
+  const cdx = d.x - c.x;
+  const cdy = d.y - c.y;
+  const denominator = cross(abx, aby, cdx, cdy);
+  if (Math.abs(denominator) < 1e-8) return false;
+  const t = cross(acx, acy, cdx, cdy) / denominator;
+  const u = cross(acx, acy, abx, aby) / denominator;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+function cross(ax: number, ay: number, bx: number, by: number): number {
+  return ax * by - ay * bx;
+}
+
 function makeCombatant(
   params: Omit<Combatant, 'flash' | 'bodyId' | 'hp' | 'maxHp' | 'mp' | 'maxMp'>,
 ): Combatant {
@@ -54,6 +93,10 @@ function attackRangeOf(hand?: CombatHand): number {
 
 function attackArcOf(hand?: CombatHand): number {
   return hand?.weapon.arc ?? BASIC_ARC;
+}
+
+function targetInMeleeRange(attacker: Combatant, target: Combatant, hand: CombatHand): boolean {
+  return distance(attacker.position, target.position) - target.radius <= attackRangeOf(hand);
 }
 
 function cloneAttrs(attrs: Attributes): Attributes {
@@ -227,9 +270,9 @@ export class RealtimeCombatEngine {
   private addBody(combatant: Combatant): void {
     const body = Matter.Bodies.circle(combatant.position.x, combatant.position.y, combatant.radius, {
       frictionAir: 0.2,
-      restitution: 0.35,
-      mass: combatant.faction === 'player' ? 1.2 : 1,
+      restitution: 0.08,
     });
+    Matter.Body.setMass(body, combatant.faction === 'player' ? 1 : 8);
     Matter.Composite.add(this.matter.world, body);
     this.bodies.set(combatant.id, body);
     combatant.bodyId = body.id;
@@ -249,11 +292,11 @@ export class RealtimeCombatEngine {
     this.setVelocity(this.player, { x: movement.x * this.player.speed, y: movement.y * this.player.speed });
 
     if (input.aim.x !== 0 || input.aim.y !== 0) this.player.facing = Math.atan2(input.aim.y, input.aim.x);
-    if (input.attacking && this.player.hp > 0) this.performReadyAttacks(this.player, this.enemies);
+    if (input.attacking && this.player.hp > 0) this.performReadyAttacks(this.player, this.attackableTargetsFor(this.player));
   }
 
   private updateNpcCombatants(): void {
-    for (const actor of [...this.enemies, ...this.allies, ...this.neutrals]) {
+    for (const actor of this.npcCombatants()) {
       if (actor.hp <= 0 || this.player.hp <= 0) {
         this.setVelocity(actor, { x: 0, y: 0 });
         continue;
@@ -297,6 +340,10 @@ export class RealtimeCombatEngine {
   private setVelocity(combatant: Combatant, velocity: Vec2): void {
     const body = this.bodies.get(combatant.id);
     if (body) {
+      const isStopped = Math.abs(velocity.x) < 0.001 && Math.abs(velocity.y) < 0.001;
+      if (combatant.faction !== 'player' && body.isStatic !== isStopped) {
+        Matter.Body.setStatic(body, isStopped);
+      }
       Matter.Body.setVelocity(body, {
         x: velocity.x / MATTER_TICKS_PER_SECOND,
         y: velocity.y / MATTER_TICKS_PER_SECOND,
@@ -328,11 +375,9 @@ export class RealtimeCombatEngine {
     let hit = false;
     for (const target of targets) {
       if (target.hp <= 0) continue;
-      const d = distance(attacker.position, target.position) - attacker.radius - target.radius;
       const targetAngle = angleTo(attacker.position, target.position);
-      const range = attackRangeOf(hand);
       const arc = attackArcOf(hand);
-      if (d <= range && angleDelta(attacker.facing, targetAngle) <= arc / 2) {
+      if (targetInMeleeRange(attacker, target, hand) && angleDelta(attacker.facing, targetAngle) <= arc / 2 && this.hasLineOfSight(attacker.position, target.position)) {
         const damage = this.resolveBasicAttackWithWeapon(attacker, target, hand.weapon, hand.side);
         if (damage > 0) {
           target.flash = 0.22;
@@ -513,7 +558,8 @@ export class RealtimeCombatEngine {
   }
 
   private maxAttackRange(combatant: Combatant): number {
-    return Math.max(...combatant.hands.map((hand) => hand.weapon.range), BASIC_RANGE);
+    if (combatant.hands.length === 0) return BASIC_RANGE;
+    return Math.max(...combatant.hands.map((hand) => hand.weapon.range));
   }
 
   private projectileHitsObstacle(projectile: Projectile): boolean {
@@ -526,8 +572,16 @@ export class RealtimeCombatEngine {
     });
   }
 
+  private hasLineOfSight(from: Vec2, to: Vec2): boolean {
+    return !this.obstacles.some((obstacle) => segmentIntersectsRect(from, to, obstacle));
+  }
+
   private combatants(): Combatant[] {
     return [this.player, ...this.enemies, ...this.allies, ...this.neutrals];
+  }
+
+  private npcCombatants(): Combatant[] {
+    return [...this.enemies, ...this.allies, ...this.neutrals];
   }
 
   private combatantById(id: number): Combatant | undefined {

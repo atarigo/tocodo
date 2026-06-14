@@ -53,6 +53,14 @@ export const ENCOUNTERS: readonly EncounterDefinition[] = [
     ],
   },
   {
+    id: 'goblin-raid',
+    name: '哥布林襲擊路人',
+    members: [
+      { enemyId: 'goblin', count: 3 },
+      { enemyId: 'civilian', count: 2, side: 'neutral' },
+    ],
+  },
+  {
     id: 'vampire-lord',
     name: '吸血鬼領主',
     members: [
