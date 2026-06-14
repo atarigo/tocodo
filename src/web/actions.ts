@@ -21,7 +21,7 @@ export function newLife(name: string): void {
   ui.game.records.lives += 1;
   ui.game.character = createCharacter(name.trim() || '無名者');
   ui.phase = 'idle';
-  pushLog(`${ui.game.character.name} 踏入血腥都市。這是這個世界的第 ${ui.game.records.lives} 段人生`);
+  pushLog(`${ui.game.character.name} 踏入世界。這是這個世界的第 ${ui.game.records.lives} 段人生`);
   saveGame();
 }
 

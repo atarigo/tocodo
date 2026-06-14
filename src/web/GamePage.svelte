@@ -7,7 +7,7 @@
 </script>
 
 <header class="topbar">
-  <h1><a class="topbar-home" href="/" onclick={(e) => { e.preventDefault(); navigate('/'); }}>血腥都市</a></h1>
+  <h1><a class="topbar-home" href="/" onclick={(e) => { e.preventDefault(); navigate('/'); }}>世界</a></h1>
   <span class="era">第 {ui.game.era} 紀元</span>
   <span class="records">最深紀錄 {ui.game.records.bestFloor} 層｜累計 {ui.game.records.lives} 段人生</span>
 </header>

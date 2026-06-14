@@ -3,7 +3,7 @@
 
 help: ## 顯示所有可用指令
 	@echo ""
-	@echo "血腥都市（第一紀元）常用指令："
+	@echo "世界（第一紀元）常用指令："
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
 	@echo ""

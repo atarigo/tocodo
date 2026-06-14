@@ -127,7 +127,7 @@
       {/if}
       <h2>建立新的人生</h2>
       <input placeholder="冒險者之名" bind:value={nameInput} maxlength="12" />
-      <button class="primary" onclick={() => newLife(nameInput)}>踏入血腥都市</button>
+      <button class="primary" onclick={() => newLife(nameInput)}>踏入世界</button>
     </div>
   {:else}
     <div class="arena">
@@ -148,7 +148,7 @@
         {#if ui.run}
           <span class="floor-label">第 {ui.run.floor} 層</span>
         {:else}
-          <span class="floor-label idle">血腥都市</span>
+          <span class="floor-label idle">世界</span>
         {/if}
       </div>
 
