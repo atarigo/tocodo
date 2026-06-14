@@ -5,6 +5,8 @@ export interface Vec2 {
 
 export type CombatantKind = 'player' | 'meleeEnemy' | 'rangedEnemy';
 export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
+export type AttackMode = 'melee' | 'projectile';
+export type AmmoType = 'arrow' | 'bullet';
 export type EquipmentSlot = 'mainHand' | 'offHand' | 'head' | 'body' | 'legs' | 'feet';
 export type EquipmentLoadout = Record<EquipmentSlot, string | null>;
 
@@ -47,10 +49,6 @@ export interface Combatant {
   position: Vec2;
   facing: number;
   speed: number;
-  attackRange: number;
-  attackArc: number;
-  attackCooldown: number;
-  cooldown: number;
   hp: number;
   maxHp: number;
   mp: number;
@@ -61,15 +59,25 @@ export interface Combatant {
   blockRate: number;
   flash: number;
   bodyId: number | null;
-  weapon?: WeaponDefinition;
+  hands: CombatHand[];
+}
+
+export type CombatHandSide = 'main' | 'off';
+
+export interface CombatHand {
+  side: CombatHandSide;
+  weapon: WeaponDefinition;
+  cooldown: number;
+  interval: number;
 }
 
 export interface WeaponDefinition {
   id: string;
   name: string;
-  slot: 'mainHand';
+  slot: 'mainHand' | 'offHand';
   twoHanded: boolean;
   kind: WeaponKind;
+  attackMode: AttackMode;
   damage: [number, number];
   balance: number;
   interval: number;
@@ -79,6 +87,21 @@ export interface WeaponDefinition {
   agiApplies: boolean;
   dexAmp: boolean;
   parryRate: number;
+  projectile?: {
+    ammoType: AmmoType;
+    shotsPerAttack: number;
+    spreadAngle: number;
+  };
+}
+
+export interface AmmoDefinition {
+  id: string;
+  name: string;
+  ammoType: AmmoType;
+  speed: number;
+  range: number;
+  radius: number;
+  quantity: number;
 }
 
 export interface GearDefinition {
@@ -101,11 +124,7 @@ export interface EnemyDefinition {
   radius: number;
   color: number;
   speed: number;
-  attackRange: number;
-  attackArc: number;
-  baseAttackInterval: number;
   preferredRange?: number;
-  projectileSpeed?: number;
   armor: number;
   reductionRate: number;
   parryRate: number;
@@ -133,10 +152,13 @@ export interface BattleSetup {
 export interface Projectile {
   id: number;
   ownerId: number;
+  weaponId: string;
+  hand: CombatHandSide;
   position: Vec2;
   velocity: Vec2;
   radius: number;
   ttl: number;
+  distanceLeft: number;
 }
 
 export interface Strike {
@@ -191,12 +213,14 @@ export interface DamageEvent extends CombatEventBase {
   target: CombatActorRef;
   amount: number;
   outcome: string;
+  hand?: CombatHandSide;
 }
 
 export interface MissEvent extends CombatEventBase {
   kind: 'miss';
   target: CombatActorRef;
   outcome: string;
+  hand?: CombatHandSide;
 }
 
 export interface StatusEvent extends CombatEventBase {

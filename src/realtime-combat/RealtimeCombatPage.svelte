@@ -1,6 +1,6 @@
 <script lang="ts">
   import { navigate } from '../web/router.svelte.js';
-  import type { Attributes, BattleResult, CombatEvent, EquipmentLoadout } from './types.js';
+  import type { Attributes, BattleResult, CombatEvent, CombatHandSide, EquipmentLoadout } from './types.js';
   import AttributePanel from './AttributePanel.svelte';
   import RealtimeCombatStage from './RealtimeCombatStage.svelte';
   import { DEFAULT_LOADOUT } from './equipmentCatalog.js';
@@ -30,12 +30,18 @@
     return outcome === '命中' ? '' : ` [${outcome}]`;
   }
 
+  function attackHandNote(hand: CombatHandSide | undefined): string {
+    if (hand === 'main') return ' [主手]';
+    if (hand === 'off') return ' [副手]';
+    return '';
+  }
+
   function eventText(event: CombatEvent): string {
     switch (event.kind) {
       case 'damage':
-        return `${event.source.name} 使用 ${event.action?.name ?? '動作'} 造成 ${event.target.name} ${event.amount} 點傷害${outcomeNote(event.outcome)}`;
+        return `${event.source.name} 使用 ${event.action?.name ?? '動作'} 造成 ${event.target.name} ${event.amount} 點傷害${attackHandNote(event.hand)}${outcomeNote(event.outcome)}`;
       case 'miss':
-        return `${event.source.name} 使用 ${event.action?.name ?? '動作'}，${event.target.name} ${event.outcome}`;
+        return `${event.source.name} 使用 ${event.action?.name ?? '動作'}，${event.target.name} ${event.outcome}${attackHandNote(event.hand)}`;
       case 'status':
         return `${event.target.name} ${event.statusAction} ${event.statusName}`;
       case 'resource':

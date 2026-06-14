@@ -1,11 +1,12 @@
 import Matter from 'matter-js';
+import { getDefaultAmmo } from './ammoCatalog.js';
 import { buildAttackTable, resolveDamage, rollOutcome, type AttackOutcome } from './attackTable.js';
 import { createDefaultBattleSetup } from './battleSetup.js';
 import { enemyById } from './enemyCatalog.js';
-import { equipmentDefense, getWeapon, normalizeLoadout } from './equipmentCatalog.js';
+import { equipmentDefense, getOffhandWeapon, getWeapon, normalizeLoadout } from './equipmentCatalog.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
 import { createRng, type Rng } from './rng.js';
-import type { Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2, WeaponDefinition } from './types.js';
+import type { Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
@@ -40,19 +41,19 @@ function angleDelta(a: number, b: number): number {
 }
 
 function makeCombatant(
-  params: Omit<Combatant, 'cooldown' | 'flash' | 'bodyId' | 'hp' | 'maxHp' | 'mp' | 'maxMp'>,
+  params: Omit<Combatant, 'flash' | 'bodyId' | 'hp' | 'maxHp' | 'mp' | 'maxMp'>,
 ): Combatant {
   const hp = maxHp(params.attrs.vit);
   const mp = maxMp(params.attrs.wil);
-  return { ...params, hp, maxHp: hp, mp, maxMp: mp, cooldown: 0, flash: 0, bodyId: null };
+  return { ...params, hp, maxHp: hp, mp, maxMp: mp, flash: 0, bodyId: null };
 }
 
-function attackRangeOf(combatant: Combatant): number {
-  return combatant.weapon?.range ?? BASIC_RANGE;
+function attackRangeOf(hand?: CombatHand): number {
+  return hand?.weapon.range ?? BASIC_RANGE;
 }
 
-function attackArcOf(combatant: Combatant): number {
-  return combatant.weapon?.arc ?? BASIC_ARC;
+function attackArcOf(hand?: CombatHand): number {
+  return hand?.weapon.arc ?? BASIC_ARC;
 }
 
 function cloneAttrs(attrs: Attributes): Attributes {
@@ -67,7 +68,7 @@ function makeEnemy(
 ): Combatant {
   const attrs = cloneAttrs(attrsOverride ?? definition.attrs);
   const loadout = normalizeLoadout(definition.loadout);
-  const weapon = getWeapon(loadout);
+  const hands = handsFromLoadout(loadout, attrs);
   const defense = equipmentDefense(loadout);
   return makeCombatant({
     id,
@@ -80,19 +81,38 @@ function makeEnemy(
     position: { ...spawn.position },
     facing: spawn.facing ?? 0,
     speed: definition.speed,
-    attackRange: weapon.range,
-    attackArc: weapon.arc,
-    attackCooldown: attackInterval(weapon.interval, attrs.agi, weapon.agiApplies),
     armor: definition.armor + defense.armor,
     reductionRate: Math.min(1, definition.reductionRate + defense.reductionRate),
     parryRate: Math.min(1, definition.parryRate + defense.parryRate),
     blockRate: Math.min(1, definition.blockRate + defense.blockRate),
-    weapon,
+    hands,
   });
 }
 
-function baseDamage(attacker: Combatant, rng: Rng): number {
-  const weapon = attacker.weapon;
+function handsFromLoadout(loadout: Parameters<typeof normalizeLoadout>[0], attrs: Attributes): CombatHand[] {
+  const normalized = normalizeLoadout(loadout);
+  const mainWeapon = getWeapon(normalized);
+  const hands: CombatHand[] = [
+    {
+      side: 'main',
+      weapon: mainWeapon,
+      cooldown: 0,
+      interval: attackInterval(mainWeapon.interval, attrs.agi, mainWeapon.agiApplies),
+    },
+  ];
+  const offhandWeapon = getOffhandWeapon(normalized);
+  if (offhandWeapon) {
+    hands.push({
+      side: 'off',
+      weapon: offhandWeapon,
+      cooldown: 0,
+      interval: attackInterval(offhandWeapon.interval, attrs.agi, offhandWeapon.agiApplies),
+    });
+  }
+  return hands;
+}
+
+function baseDamageWithWeapon(attacker: Combatant, rng: Rng, weapon?: WeaponDefinition): number {
   if (!weapon) {
     const balance = effectiveBalance(BASIC_BALANCE, attacker.attrs.dex);
     return balanceRoll(rng, BASIC_DAMAGE[0], BASIC_DAMAGE[1], balance) + attacker.attrs.str;
@@ -125,7 +145,7 @@ export class RealtimeCombatEngine {
     this.onEvent = opts.onEvent;
     const setup = opts.setup ?? createDefaultBattleSetup();
     const playerLoadout = normalizeLoadout(setup.player.loadout);
-    const playerWeapon = getWeapon(playerLoadout);
+    const playerHands = handsFromLoadout(playerLoadout, setup.player.attrs);
     const playerDefense = equipmentDefense(playerLoadout);
     this.player = makeCombatant({
       id: PLAYER_ID,
@@ -137,14 +157,11 @@ export class RealtimeCombatEngine {
       position: { ...setup.player.position },
       facing: setup.player.facing,
       speed: 230,
-      attackRange: playerWeapon.range,
-      attackArc: playerWeapon.arc,
-      attackCooldown: attackInterval(playerWeapon.interval, setup.player.attrs.agi, playerWeapon.agiApplies),
       armor: playerDefense.armor,
       reductionRate: playerDefense.reductionRate,
       parryRate: playerDefense.parryRate,
       blockRate: playerDefense.blockRate,
-      weapon: playerWeapon,
+      hands: playerHands,
     });
 
     this.enemies = setup.enemies.map((spawn, index) =>
@@ -200,7 +217,9 @@ export class RealtimeCombatEngine {
 
   private tickTimers(dt: number): void {
     for (const combatant of [this.player, ...this.enemies]) {
-      combatant.cooldown = Math.max(0, combatant.cooldown - dt);
+      for (const hand of combatant.hands) {
+        hand.cooldown = Math.max(0, hand.cooldown - dt);
+      }
       combatant.flash = Math.max(0, combatant.flash - dt);
     }
   }
@@ -210,7 +229,7 @@ export class RealtimeCombatEngine {
     this.setVelocity(this.player, { x: movement.x * this.player.speed, y: movement.y * this.player.speed });
 
     if (input.aim.x !== 0 || input.aim.y !== 0) this.player.facing = Math.atan2(input.aim.y, input.aim.x);
-    if (input.attacking && this.player.cooldown === 0 && this.player.hp > 0) this.swing(this.player, this.enemies, 'slash');
+    if (input.attacking && this.player.hp > 0) this.performReadyAttacks(this.player, this.enemies);
   }
 
   private updateEnemies(): void {
@@ -227,17 +246,17 @@ export class RealtimeCombatEngine {
       const d = length(toPlayer);
       enemy.facing = Math.atan2(dir.y, dir.x);
 
-      if (enemy.kind === 'rangedEnemy') {
+      if (this.hasProjectileAttack(enemy)) {
         const definition = this.definitionFor(enemy);
         const preferred = definition.preferredRange ?? 170;
         const moveSign = d < preferred ? -1 : 1;
         const shouldMove = Math.abs(d - preferred) > 26;
         this.setVelocity(enemy, shouldMove ? { x: dir.x * enemy.speed * moveSign, y: dir.y * enemy.speed * moveSign } : { x: 0, y: 0 });
-        if (d <= enemy.attackRange && enemy.cooldown === 0) this.shoot(enemy);
+        if (d <= this.maxAttackRange(enemy) && this.hasReadyHand(enemy)) this.performReadyAttacks(enemy, [this.player]);
       } else {
-        const holdDistance = enemy.attackRange + this.player.radius - 8;
+        const holdDistance = this.maxAttackRange(enemy) + this.player.radius - 8;
         this.setVelocity(enemy, d > holdDistance ? { x: dir.x * enemy.speed, y: dir.y * enemy.speed } : { x: 0, y: 0 });
-        if (d <= enemy.attackRange + this.player.radius && enemy.cooldown === 0) this.swing(enemy, [this.player], 'arc');
+        if (d <= this.maxAttackRange(enemy) + this.player.radius && this.hasReadyHand(enemy)) this.performReadyAttacks(enemy, [this.player]);
       }
 
       if (distance(enemy.position, this.player.position) <= enemy.radius + this.player.radius + 2) {
@@ -272,16 +291,24 @@ export class RealtimeCombatEngine {
     }
   }
 
-  private swing(attacker: Combatant, targets: Combatant[], style: Strike['style']): void {
+  private performReadyAttacks(attacker: Combatant, targets: Combatant[]): void {
+    const readyHands = attacker.hands.filter((hand) => hand.cooldown === 0);
+    for (const hand of readyHands) {
+      if (hand.weapon.attackMode === 'projectile') this.shoot(attacker, hand);
+      else this.swing(attacker, hand, targets, attacker.kind === 'player' ? 'slash' : 'arc');
+    }
+  }
+
+  private swing(attacker: Combatant, hand: CombatHand, targets: Combatant[], style: Strike['style']): void {
     let hit = false;
     for (const target of targets) {
       if (target.hp <= 0) continue;
       const d = distance(attacker.position, target.position) - attacker.radius - target.radius;
       const targetAngle = angleTo(attacker.position, target.position);
-      const range = attackRangeOf(attacker);
-      const arc = attackArcOf(attacker);
+      const range = attackRangeOf(hand);
+      const arc = attackArcOf(hand);
       if (d <= range && angleDelta(attacker.facing, targetAngle) <= arc / 2) {
-        const damage = this.resolveBasicAttack(attacker, target);
+        const damage = this.resolveBasicAttackWithWeapon(attacker, target, hand.weapon, hand.side);
         if (damage > 0) {
           target.flash = 0.22;
           this.addImpact(target.position);
@@ -291,45 +318,62 @@ export class RealtimeCombatEngine {
       }
     }
 
-    attacker.cooldown = attacker.attackCooldown;
+    hand.cooldown = hand.interval;
     this.strikes.push({
       id: this.nextEffectId++,
       position: { ...attacker.position },
       angle: attacker.facing,
-      range: attackRangeOf(attacker),
-      arc: attackArcOf(attacker),
+      range: attackRangeOf(hand),
+      arc: attackArcOf(hand),
       ttl: hit ? 0.2 : 0.16,
       color: attacker.color,
       style,
     });
   }
 
-  private shoot(attacker: Combatant): void {
-    const dir = normalize({
-      x: this.player.position.x - attacker.position.x,
-      y: this.player.position.y - attacker.position.y,
-    });
-    attacker.cooldown = attacker.attackCooldown;
+  private shoot(attacker: Combatant, hand: CombatHand): void {
+    const weapon = hand.weapon;
+    if (!weapon.projectile) return;
+    const parallelHands = attacker.hands.filter((item) => item.cooldown === 0 && item.weapon.projectile);
+    const laneIndex = Math.max(0, parallelHands.findIndex((item) => item === hand));
+    const laneOffset = (laneIndex - (parallelHands.length - 1) / 2) * 14;
+    hand.cooldown = hand.interval;
     attacker.flash = 0.08;
-    const projectileSpeed = this.definitionFor(attacker).projectileSpeed ?? 285;
-    this.projectiles.push({
-      id: this.nextProjectileId++,
-      ownerId: attacker.id,
-      position: {
-        x: attacker.position.x + dir.x * (attacker.radius + 8),
-        y: attacker.position.y + dir.y * (attacker.radius + 8),
-      },
-      velocity: { x: dir.x * projectileSpeed, y: dir.y * projectileSpeed },
-      radius: 5,
-      ttl: 2.2,
-    });
+
+    const projectile = weapon.projectile;
+    const ammo = getDefaultAmmo(projectile.ammoType);
+    const shotCount = projectile.shotsPerAttack;
+    const range = Math.min(weapon.range, ammo.range);
+    for (let i = 0; i < shotCount; i += 1) {
+      const spreadOffset = shotCount === 1 ? 0 : (i - (shotCount - 1) / 2) * projectile.spreadAngle;
+      const angle = attacker.facing + spreadOffset;
+      const shotDir = { x: Math.cos(angle), y: Math.sin(angle) };
+      const sideDir = { x: -Math.sin(attacker.facing), y: Math.cos(attacker.facing) };
+      this.projectiles.push({
+        id: this.nextProjectileId++,
+        ownerId: attacker.id,
+        weaponId: weapon.id,
+        hand: hand.side,
+        position: {
+          x: attacker.position.x + shotDir.x * (attacker.radius + 8) + sideDir.x * laneOffset,
+          y: attacker.position.y + shotDir.y * (attacker.radius + 8) + sideDir.y * laneOffset,
+        },
+        velocity: { x: shotDir.x * ammo.speed, y: shotDir.y * ammo.speed },
+        radius: ammo.radius,
+        ttl: range / ammo.speed,
+        distanceLeft: range,
+      });
+    }
   }
 
   private tickProjectiles(dt: number): void {
     for (let i = this.projectiles.length - 1; i >= 0; i -= 1) {
       const projectile = this.projectiles[i];
-      projectile.position.x += projectile.velocity.x * dt;
-      projectile.position.y += projectile.velocity.y * dt;
+      const dx = projectile.velocity.x * dt;
+      const dy = projectile.velocity.y * dt;
+      projectile.position.x += dx;
+      projectile.position.y += dy;
+      projectile.distanceLeft -= Math.hypot(dx, dy);
       projectile.ttl -= dt;
 
       const outside =
@@ -338,14 +382,33 @@ export class RealtimeCombatEngine {
         projectile.position.y < -20 ||
         projectile.position.y > ARENA_HEIGHT + 20;
 
-      if (outside || projectile.ttl <= 0) {
+      if (outside || projectile.ttl <= 0 || projectile.distanceLeft <= 0) {
         this.projectiles.splice(i, 1);
         continue;
       }
 
-      if (distance(projectile.position, this.player.position) <= projectile.radius + this.player.radius) {
+      if (projectile.ownerId === PLAYER_ID) {
+        const attacker = this.player;
+        const weapon = this.weaponById(attacker, projectile.weaponId);
+        let removed = false;
+        for (const enemy of this.enemies) {
+          if (enemy.hp <= 0) continue;
+          if (distance(projectile.position, enemy.position) > projectile.radius + enemy.radius) continue;
+          const damage = this.resolveBasicAttackWithWeapon(attacker, enemy, weapon, projectile.hand);
+          if (damage > 0) {
+            enemy.flash = 0.25;
+            this.addImpact(projectile.position);
+            this.addDamageText(enemy.position, damage);
+          }
+          this.projectiles.splice(i, 1);
+          removed = true;
+          break;
+        }
+        if (removed) continue;
+      } else if (distance(projectile.position, this.player.position) <= projectile.radius + this.player.radius) {
         const attacker = this.enemies.find((enemy) => enemy.id === projectile.ownerId);
-        const damage = attacker ? this.resolveBasicAttack(attacker, this.player) : 0;
+        const weapon = attacker ? this.weaponById(attacker, projectile.weaponId) : undefined;
+        const damage = attacker ? this.resolveBasicAttackWithWeapon(attacker, this.player, weapon, projectile.hand) : 0;
         if (damage > 0) {
           this.player.flash = 0.25;
           this.addImpact(projectile.position);
@@ -387,28 +450,28 @@ export class RealtimeCombatEngine {
     });
   }
 
-  private resolveBasicAttack(attacker: Combatant, target: Combatant): number {
+  private resolveBasicAttackWithWeapon(attacker: Combatant, target: Combatant, weapon?: WeaponDefinition, hand?: CombatHandSide): number {
     const table = buildAttackTable({
       attacker: attacker.attrs,
       defender: target.attrs,
       defenderParryRate: target.parryRate,
       defenderBlockRate: target.blockRate,
-      attackerCanCrit: true,
+      attackerCanCrit: weapon?.kind !== '槍',
       attackerCrushRate: 0,
-      canBeParried: true,
+      canBeParried: weapon?.attackMode !== 'projectile',
       canBeBlocked: true,
     });
     const outcome = rollOutcome(table, this.rng);
-    const base = baseDamage(attacker, this.rng);
+    const base = baseDamageWithWeapon(attacker, this.rng, weapon);
     const result = resolveDamage(outcome, base, { armor: target.armor, reductionRate: target.reductionRate });
     const damage = result.damage;
 
     if (damage > 0) {
       target.hp = Math.max(0, target.hp - damage);
-      this.pushDamageEvent(attacker, target, outcome, damage);
+      this.pushDamageEvent(attacker, target, outcome, damage, hand);
       if (target.hp <= 0) this.pushDeathEvent(attacker, target);
     } else {
-      this.pushMissEvent(attacker, target, outcome);
+      this.pushMissEvent(attacker, target, outcome, hand);
     }
     return damage;
   }
@@ -416,6 +479,22 @@ export class RealtimeCombatEngine {
   private definitionFor(enemy: Combatant): EnemyDefinition {
     if (!enemy.definitionId) throw new Error(`${enemy.name} does not have an enemy definition`);
     return enemyById(enemy.definitionId);
+  }
+
+  private weaponById(attacker: Combatant, weaponId: string): WeaponDefinition | undefined {
+    return attacker.hands.find((hand) => hand.weapon.id === weaponId)?.weapon;
+  }
+
+  private hasReadyHand(combatant: Combatant): boolean {
+    return combatant.hands.some((hand) => hand.cooldown === 0);
+  }
+
+  private hasProjectileAttack(combatant: Combatant): boolean {
+    return combatant.hands.some((hand) => hand.weapon.attackMode === 'projectile');
+  }
+
+  private maxAttackRange(combatant: Combatant): number {
+    return Math.max(...combatant.hands.map((hand) => hand.weapon.range), BASIC_RANGE);
   }
 
   private checkBattleEnd(): void {
@@ -437,7 +516,7 @@ export class RealtimeCombatEngine {
     };
   }
 
-  private pushDamageEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome, damage: number): void {
+  private pushDamageEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome, damage: number, hand?: CombatHandSide): void {
     this.onEvent?.({
       id: this.nextLogId++,
       kind: 'damage',
@@ -446,10 +525,11 @@ export class RealtimeCombatEngine {
       action: { kind: 'basicAttack', name: '普攻' },
       amount: damage,
       outcome,
+      hand,
     });
   }
 
-  private pushMissEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome): void {
+  private pushMissEvent(attacker: Combatant, target: Combatant, outcome: AttackOutcome, hand?: CombatHandSide): void {
     this.onEvent?.({
       id: this.nextLogId++,
       kind: 'miss',
@@ -457,6 +537,7 @@ export class RealtimeCombatEngine {
       target: this.actorRef(target),
       action: { kind: 'basicAttack', name: '普攻' },
       outcome,
+      hand,
     });
   }
 

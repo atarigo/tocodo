@@ -16,6 +16,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
     slot: 'mainHand',
     twoHanded: false,
     kind: '近戰',
+    attackMode: 'melee',
     damage: [8, 14],
     balance: 0.45,
     interval: 1.8,
@@ -32,6 +33,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
     slot: 'mainHand',
     twoHanded: false,
     kind: '近戰',
+    attackMode: 'melee',
     damage: [5, 9],
     balance: 0.55,
     interval: 1.1,
@@ -48,6 +50,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
     slot: 'mainHand',
     twoHanded: true,
     kind: '近戰',
+    attackMode: 'melee',
     damage: [16, 34],
     balance: 0.35,
     interval: 2.8,
@@ -64,6 +67,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
     slot: 'mainHand',
     twoHanded: true,
     kind: '近戰',
+    attackMode: 'melee',
     damage: [10, 18],
     balance: 0.42,
     interval: 2.1,
@@ -80,6 +84,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
     slot: 'mainHand',
     twoHanded: true,
     kind: '弓',
+    attackMode: 'projectile',
     damage: [9, 19],
     balance: 0.4,
     interval: 2.0,
@@ -89,6 +94,78 @@ export const WEAPONS: readonly WeaponDefinition[] = [
     agiApplies: true,
     dexAmp: true,
     parryRate: 0.05,
+    projectile: { ammoType: 'arrow', shotsPerAttack: 1, spreadAngle: 0 },
+  },
+  {
+    id: 'pistol',
+    name: '手槍',
+    slot: 'mainHand',
+    twoHanded: false,
+    kind: '槍',
+    attackMode: 'projectile',
+    damage: [12, 16],
+    balance: 0.6,
+    interval: 1.3,
+    range: 220,
+    arc: Math.PI / 8,
+    strApplies: false,
+    agiApplies: false,
+    dexAmp: false,
+    parryRate: 0,
+    projectile: { ammoType: 'bullet', shotsPerAttack: 1, spreadAngle: 0 },
+  },
+  {
+    id: 'revolver',
+    name: '重型左輪',
+    slot: 'offHand',
+    twoHanded: false,
+    kind: '槍',
+    attackMode: 'projectile',
+    damage: [15, 21],
+    balance: 0.6,
+    interval: 1.85,
+    range: 200,
+    arc: Math.PI / 8,
+    strApplies: false,
+    agiApplies: false,
+    dexAmp: false,
+    parryRate: 0,
+    projectile: { ammoType: 'bullet', shotsPerAttack: 1, spreadAngle: 0 },
+  },
+  {
+    id: 'offhand-dagger',
+    name: '副手短刀',
+    slot: 'offHand',
+    twoHanded: false,
+    kind: '近戰',
+    attackMode: 'melee',
+    damage: [4, 8],
+    balance: 0.55,
+    interval: 0.9,
+    range: 52,
+    arc: (Math.PI * 65) / 180,
+    strApplies: true,
+    agiApplies: true,
+    dexAmp: true,
+    parryRate: 0.08,
+  },
+  {
+    id: 'rifle',
+    name: '步槍',
+    slot: 'mainHand',
+    twoHanded: true,
+    kind: '槍',
+    attackMode: 'projectile',
+    damage: [24, 32],
+    balance: 0.65,
+    interval: 2.2,
+    range: 360,
+    arc: Math.PI / 10,
+    strApplies: false,
+    agiApplies: false,
+    dexAmp: false,
+    parryRate: 0,
+    projectile: { ammoType: 'bullet', shotsPerAttack: 1, spreadAngle: 0 },
   },
 ];
 
@@ -126,6 +203,12 @@ export function getWeapon(loadout: EquipmentLoadout): WeaponDefinition {
   return mainHand;
 }
 
+export function getOffhandWeapon(loadout: EquipmentLoadout): WeaponDefinition | null {
+  const normalized = normalizeLoadout(loadout);
+  const offHand = normalized.offHand ? getEquipment(normalized.offHand) : null;
+  return offHand?.slot === 'offHand' && 'damage' in offHand ? offHand : null;
+}
+
 export function equipmentOptionsFor(slot: EquipmentSlot): EquipmentDefinition[] {
   return EQUIPMENT.filter((item) => item.slot === slot);
 }
@@ -145,7 +228,7 @@ export function equipmentDefense(loadout: EquipmentLoadout): DefenseStats {
   for (const id of Object.values(normalized)) {
     if (!id) continue;
     const item = getEquipment(id);
-    if (item.slot === 'mainHand') {
+    if ('damage' in item) {
       defense.parryRate += item.parryRate;
       continue;
     }
