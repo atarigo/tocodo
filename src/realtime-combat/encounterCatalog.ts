@@ -5,7 +5,7 @@ import type { DifficultyRank, EnemySpawn, Vec2 } from './types.js';
 interface EncounterMember {
   enemyId: EnemyArchetypeId;
   count: number;
-  side?: 'enemy' | 'ally';
+  side?: 'enemy' | 'ally' | 'neutral';
 }
 
 interface EncounterDefinition {
@@ -26,6 +26,11 @@ const ENEMY_POSITIONS: Vec2[] = [
 const ALLY_POSITIONS: Vec2[] = [
   { x: 300, y: 345 },
   { x: 260, y: 280 },
+];
+
+const NEUTRAL_POSITIONS: Vec2[] = [
+  { x: 420, y: 145 },
+  { x: 360, y: 470 },
 ];
 
 export const ENCOUNTERS: readonly EncounterDefinition[] = [
@@ -76,16 +81,17 @@ function facingFor(position: Vec2): number {
   return Math.atan2(310 - position.y, 400 - position.x);
 }
 
-export function createEncounterSpawns(rank: DifficultyRank, seed: number): { name: string; enemies: EnemySpawn[]; allies: EnemySpawn[] } {
+export function createEncounterSpawns(rank: DifficultyRank, seed: number): { name: string; enemies: EnemySpawn[]; allies: EnemySpawn[]; neutrals: EnemySpawn[] } {
   const rng = createRng(seed);
   const encounter = pick(rng, ENCOUNTERS);
   const enemies: EnemySpawn[] = [];
   const allies: EnemySpawn[] = [];
+  const neutrals: EnemySpawn[] = [];
 
   for (const member of encounter.members) {
     for (let i = 0; i < member.count; i += 1) {
-      const list = member.side === 'ally' ? allies : enemies;
-      const positions = member.side === 'ally' ? ALLY_POSITIONS : ENEMY_POSITIONS;
+      const list = member.side === 'ally' ? allies : member.side === 'neutral' ? neutrals : enemies;
+      const positions = member.side === 'ally' ? ALLY_POSITIONS : member.side === 'neutral' ? NEUTRAL_POSITIONS : ENEMY_POSITIONS;
       const position = positions[list.length % positions.length];
       list.push({
         enemyId: member.enemyId,
@@ -97,7 +103,7 @@ export function createEncounterSpawns(rank: DifficultyRank, seed: number): { nam
     }
   }
 
-  return { name: encounter.name, enemies, allies };
+  return { name: encounter.name, enemies, allies, neutrals };
 }
 
 function displayName(enemyId: EnemyArchetypeId): string {

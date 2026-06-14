@@ -116,6 +116,14 @@
     effectsLayer.removeChildren().forEach((child) => child.destroy());
     projectilesLayer.removeChildren().forEach((child) => child.destroy());
 
+    for (const obstacle of engine.obstacles) {
+      const g = new Graphics();
+      g.roundRect(-obstacle.width / 2, -obstacle.height / 2, obstacle.width, obstacle.height, 4).fill({ color: 0x2b2f3a });
+      g.roundRect(-obstacle.width / 2, -obstacle.height / 2, obstacle.width, obstacle.height, 4).stroke({ color: 0x4a5060, width: 2 });
+      g.position.set(obstacle.position.x, obstacle.position.y);
+      entitiesLayer.addChild(g);
+    }
+
     for (const strike of engine.strikes) drawStrike(effectsLayer, strike);
     for (const impact of engine.impacts) {
       const g = new Graphics();
@@ -149,6 +157,8 @@
     }
     drawCombatant(entitiesLayer, engine.player);
     for (const enemy of engine.enemies) drawCombatant(entitiesLayer, enemy);
+    for (const ally of engine.allies) drawCombatant(entitiesLayer, ally);
+    for (const neutral of engine.neutrals) drawCombatant(entitiesLayer, neutral);
   }
 
   function resize(): void {

@@ -151,6 +151,17 @@
               </div>
             {/each}
           {/if}
+          {#if battleSetup.neutrals?.length}
+            {#each battleSetup.neutrals as neutral, index}
+              <div class="enemy-info neutral-info">
+                <strong>{neutral.name ?? `中立 ${index + 1}`}</strong>
+                {#if neutral.attrs}
+                  <span>{spawnHpMp(neutral)}</span>
+                  <small>{attrLine(neutral.attrs)}</small>
+                {/if}
+              </div>
+            {/each}
+          {/if}
         </div>
       {:else}
         <div class="muted-line">開始遊戲後顯示本次敵人屬性</div>
@@ -388,6 +399,10 @@
 
   .ally-info strong {
     color: #6fbf73;
+  }
+
+  .neutral-info strong {
+    color: #c7b98b;
   }
 
   .summary-list {

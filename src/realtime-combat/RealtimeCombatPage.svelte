@@ -100,7 +100,12 @@
     <h2>戰鬥日誌</h2>
     <div class="log-list">
       {#each events as event (event.id)}
-        <div class:player-line={event.source.side === 'player'} class:enemy-line={event.source.side === 'enemy'}>
+        <div
+          class:player-line={event.source.side === 'player'}
+          class:enemy-line={event.source.side === 'enemy'}
+          class:ally-line={event.source.side === 'ally'}
+          class:neutral-line={event.source.side === 'neutral'}
+        >
           {eventText(event)}
         </div>
       {/each}
@@ -208,6 +213,14 @@
 
   .enemy-line {
     color: var(--accent);
+  }
+
+  .ally-line {
+    color: var(--good);
+  }
+
+  .neutral-line {
+    color: #c7b98b;
   }
 
   @media (max-width: 980px) {

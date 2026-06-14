@@ -4,6 +4,7 @@ export interface Vec2 {
 }
 
 export type CombatantKind = 'player' | 'meleeEnemy' | 'rangedEnemy';
+export type CombatFaction = 'player' | 'enemy' | 'ally' | 'neutral';
 export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
 export type AttackMode = 'melee' | 'projectile';
 export type AmmoType = 'arrow' | 'bullet';
@@ -42,6 +43,7 @@ export interface DefenseStats {
 export interface Combatant {
   id: number;
   kind: CombatantKind;
+  faction: CombatFaction;
   definitionId?: string;
   name: string;
   attrs: Attributes;
@@ -61,6 +63,7 @@ export interface Combatant {
   flash: number;
   bodyId: number | null;
   hands: CombatHand[];
+  retaliationTargetId?: number;
 }
 
 export type CombatHandSide = 'main' | 'off';
@@ -142,6 +145,13 @@ export interface EnemySpawn {
   attrs?: Attributes;
 }
 
+export interface ArenaObstacle {
+  id: number;
+  position: Vec2;
+  width: number;
+  height: number;
+}
+
 export interface BattleSetup {
   difficulty?: DifficultyRank;
   encounterName?: string;
@@ -154,6 +164,8 @@ export interface BattleSetup {
   };
   enemies: EnemySpawn[];
   allies?: EnemySpawn[];
+  neutrals?: EnemySpawn[];
+  obstacles?: ArenaObstacle[];
 }
 
 export interface Projectile {
@@ -192,7 +204,7 @@ export interface DamageText {
   ttl: number;
 }
 
-export type CombatSide = 'player' | 'enemy';
+export type CombatSide = CombatFaction;
 export type CombatActionKind = 'basicAttack';
 export type CombatEventKind = 'damage' | 'miss' | 'status' | 'resource' | 'death' | 'battleEnd';
 export type BattleResult = 'playerWon' | 'playerLost';

@@ -6,7 +6,7 @@ import { enemyById } from './enemyCatalog.js';
 import { equipmentDefense, getOffhandWeapon, getWeapon, normalizeLoadout } from './equipmentCatalog.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
 import { createRng, type Rng } from './rng.js';
-import type { Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2, WeaponDefinition } from './types.js';
+import type { ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
@@ -64,6 +64,7 @@ function makeEnemy(
   id: number,
   definition: EnemyDefinition,
   spawn: EnemySpawn,
+  faction: CombatFaction,
   attrsOverride?: Attributes,
 ): Combatant {
   const attrs = cloneAttrs(attrsOverride ?? spawn.attrs ?? definition.attrs);
@@ -73,6 +74,7 @@ function makeEnemy(
   return makeCombatant({
     id,
     kind: definition.kind,
+    faction,
     definitionId: definition.id,
     name: spawn.name ?? definition.name,
     attrs,
@@ -126,6 +128,9 @@ function baseDamageWithWeapon(attacker: Combatant, rng: Rng, weapon?: WeaponDefi
 export class RealtimeCombatEngine {
   readonly player: Combatant;
   readonly enemies: Combatant[];
+  readonly allies: Combatant[];
+  readonly neutrals: Combatant[];
+  readonly obstacles: ArenaObstacle[];
   readonly projectiles: Projectile[] = [];
   readonly strikes: Strike[] = [];
   readonly impacts: Impact[] = [];
@@ -150,6 +155,7 @@ export class RealtimeCombatEngine {
     this.player = makeCombatant({
       id: PLAYER_ID,
       kind: 'player',
+      faction: 'player',
       name: setup.player.name,
       attrs: cloneAttrs(setup.player.attrs),
       radius: 17,
@@ -164,13 +170,15 @@ export class RealtimeCombatEngine {
       hands: playerHands,
     });
 
-    this.enemies = setup.enemies.map((spawn, index) =>
-      makeEnemy(2 + index, enemyById(spawn.enemyId), spawn, opts.enemyAttrsOverride),
-    );
+    let nextActorId = 2;
+    this.enemies = setup.enemies.map((spawn) => makeEnemy(nextActorId++, enemyById(spawn.enemyId), spawn, 'enemy', opts.enemyAttrsOverride));
+    this.allies = (setup.allies ?? []).map((spawn) => makeEnemy(nextActorId++, enemyById(spawn.enemyId), spawn, 'ally'));
+    this.neutrals = (setup.neutrals ?? []).map((spawn) => makeEnemy(nextActorId++, enemyById(spawn.enemyId), spawn, 'neutral'));
+    this.obstacles = setup.obstacles ?? [];
 
     this.addWalls();
-    this.addBody(this.player);
-    for (const enemy of this.enemies) this.addBody(enemy);
+    this.addObstacles();
+    for (const combatant of this.combatants()) this.addBody(combatant);
   }
 
   destroy(): void {
@@ -183,7 +191,7 @@ export class RealtimeCombatEngine {
     this.tickTimers(safeDt);
     if (!this.result) {
       this.updatePlayer(input);
-      this.updateEnemies();
+      this.updateNpcCombatants();
     } else {
       this.stopBodies();
     }
@@ -204,11 +212,23 @@ export class RealtimeCombatEngine {
     ]);
   }
 
+  private addObstacles(): void {
+    for (const obstacle of this.obstacles) {
+      Matter.Composite.add(
+        this.matter.world,
+        Matter.Bodies.rectangle(obstacle.position.x, obstacle.position.y, obstacle.width, obstacle.height, {
+          isStatic: true,
+          restitution: 0.2,
+        }),
+      );
+    }
+  }
+
   private addBody(combatant: Combatant): void {
     const body = Matter.Bodies.circle(combatant.position.x, combatant.position.y, combatant.radius, {
       frictionAir: 0.2,
       restitution: 0.35,
-      mass: combatant.kind === 'player' ? 1.2 : 1,
+      mass: combatant.faction === 'player' ? 1.2 : 1,
     });
     Matter.Composite.add(this.matter.world, body);
     this.bodies.set(combatant.id, body);
@@ -216,7 +236,7 @@ export class RealtimeCombatEngine {
   }
 
   private tickTimers(dt: number): void {
-    for (const combatant of [this.player, ...this.enemies]) {
+    for (const combatant of this.combatants()) {
       for (const hand of combatant.hands) {
         hand.cooldown = Math.max(0, hand.cooldown - dt);
       }
@@ -232,37 +252,43 @@ export class RealtimeCombatEngine {
     if (input.attacking && this.player.hp > 0) this.performReadyAttacks(this.player, this.enemies);
   }
 
-  private updateEnemies(): void {
-    for (const enemy of this.enemies) {
-      if (enemy.hp <= 0 || this.player.hp <= 0) {
-        this.setVelocity(enemy, { x: 0, y: 0 });
+  private updateNpcCombatants(): void {
+    for (const actor of [...this.enemies, ...this.allies, ...this.neutrals]) {
+      if (actor.hp <= 0 || this.player.hp <= 0) {
+        this.setVelocity(actor, { x: 0, y: 0 });
         continue;
       }
-      const toPlayer = {
-        x: this.player.position.x - enemy.position.x,
-        y: this.player.position.y - enemy.position.y,
-      };
-      const dir = normalize(toPlayer);
-      const d = length(toPlayer);
-      enemy.facing = Math.atan2(dir.y, dir.x);
+      const target = this.targetFor(actor);
+      if (!target) {
+        this.setVelocity(actor, { x: 0, y: 0 });
+        continue;
+      }
 
-      if (this.hasProjectileAttack(enemy)) {
-        const definition = this.definitionFor(enemy);
+      const toTarget = {
+        x: target.position.x - actor.position.x,
+        y: target.position.y - actor.position.y,
+      };
+      const dir = normalize(toTarget);
+      const d = length(toTarget);
+      actor.facing = Math.atan2(dir.y, dir.x);
+
+      if (this.hasProjectileAttack(actor)) {
+        const definition = this.definitionFor(actor);
         const preferred = definition.preferredRange ?? 170;
         const moveSign = d < preferred ? -1 : 1;
         const shouldMove = Math.abs(d - preferred) > 26;
-        this.setVelocity(enemy, shouldMove ? { x: dir.x * enemy.speed * moveSign, y: dir.y * enemy.speed * moveSign } : { x: 0, y: 0 });
-        if (d <= this.maxAttackRange(enemy) && this.hasReadyHand(enemy)) this.performReadyAttacks(enemy, [this.player]);
+        this.setVelocity(actor, shouldMove ? { x: dir.x * actor.speed * moveSign, y: dir.y * actor.speed * moveSign } : { x: 0, y: 0 });
+        if (d <= this.maxAttackRange(actor) && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
       } else {
-        const holdDistance = this.maxAttackRange(enemy) + this.player.radius - 8;
-        this.setVelocity(enemy, d > holdDistance ? { x: dir.x * enemy.speed, y: dir.y * enemy.speed } : { x: 0, y: 0 });
-        if (d <= this.maxAttackRange(enemy) + this.player.radius && this.hasReadyHand(enemy)) this.performReadyAttacks(enemy, [this.player]);
+        const holdDistance = this.maxAttackRange(actor) + target.radius - 8;
+        this.setVelocity(actor, d > holdDistance ? { x: dir.x * actor.speed, y: dir.y * actor.speed } : { x: 0, y: 0 });
+        if (d <= this.maxAttackRange(actor) + target.radius && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
       }
 
-      if (distance(enemy.position, this.player.position) <= enemy.radius + this.player.radius + 2) {
+      if (distance(actor.position, target.position) <= actor.radius + target.radius + 2) {
         this.addImpact({
-          x: (enemy.position.x + this.player.position.x) / 2,
-          y: (enemy.position.y + this.player.position.y) / 2,
+          x: (actor.position.x + target.position.x) / 2,
+          y: (actor.position.y + target.position.y) / 2,
         });
       }
     }
@@ -279,12 +305,11 @@ export class RealtimeCombatEngine {
   }
 
   private stopBodies(): void {
-    this.setVelocity(this.player, { x: 0, y: 0 });
-    for (const enemy of this.enemies) this.setVelocity(enemy, { x: 0, y: 0 });
+    for (const combatant of this.combatants()) this.setVelocity(combatant, { x: 0, y: 0 });
   }
 
   private syncPositions(): void {
-    for (const combatant of [this.player, ...this.enemies]) {
+    for (const combatant of this.combatants()) {
       const body = this.bodies.get(combatant.id);
       if (!body) continue;
       combatant.position = { x: body.position.x, y: body.position.y };
@@ -382,40 +407,33 @@ export class RealtimeCombatEngine {
         projectile.position.y < -20 ||
         projectile.position.y > ARENA_HEIGHT + 20;
 
-      if (outside || projectile.ttl <= 0 || projectile.distanceLeft <= 0) {
+      if (outside || projectile.ttl <= 0 || projectile.distanceLeft <= 0 || this.projectileHitsObstacle(projectile)) {
         this.projectiles.splice(i, 1);
         continue;
       }
 
-      if (projectile.ownerId === PLAYER_ID) {
-        const attacker = this.player;
-        const weapon = this.weaponById(attacker, projectile.weaponId);
-        let removed = false;
-        for (const enemy of this.enemies) {
-          if (enemy.hp <= 0) continue;
-          if (distance(projectile.position, enemy.position) > projectile.radius + enemy.radius) continue;
-          const damage = this.resolveBasicAttackWithWeapon(attacker, enemy, weapon, projectile.hand);
-          if (damage > 0) {
-            enemy.flash = 0.25;
-            this.addImpact(projectile.position);
-            this.addDamageText(enemy.position, damage);
-          }
-          this.projectiles.splice(i, 1);
-          removed = true;
-          break;
-        }
-        if (removed) continue;
-      } else if (distance(projectile.position, this.player.position) <= projectile.radius + this.player.radius) {
-        const attacker = this.enemies.find((enemy) => enemy.id === projectile.ownerId);
-        const weapon = attacker ? this.weaponById(attacker, projectile.weaponId) : undefined;
-        const damage = attacker ? this.resolveBasicAttackWithWeapon(attacker, this.player, weapon, projectile.hand) : 0;
+      const attacker = this.combatantById(projectile.ownerId);
+      if (!attacker || attacker.hp <= 0) {
+        this.projectiles.splice(i, 1);
+        continue;
+      }
+
+      const weapon = this.weaponById(attacker, projectile.weaponId);
+      let removed = false;
+      for (const target of this.attackableTargetsFor(attacker)) {
+        if (target.hp <= 0) continue;
+        if (distance(projectile.position, target.position) > projectile.radius + target.radius) continue;
+        const damage = this.resolveBasicAttackWithWeapon(attacker, target, weapon, projectile.hand);
         if (damage > 0) {
-          this.player.flash = 0.25;
+          target.flash = 0.25;
           this.addImpact(projectile.position);
-          this.addDamageText(this.player.position, damage);
+          this.addDamageText(target.position, damage);
         }
         this.projectiles.splice(i, 1);
+        removed = true;
+        break;
       }
+      if (removed) continue;
     }
   }
 
@@ -468,6 +486,7 @@ export class RealtimeCombatEngine {
 
     if (damage > 0) {
       target.hp = Math.max(0, target.hp - damage);
+      if (target.faction === 'neutral' && target.hp > 0) target.retaliationTargetId = attacker.id;
       this.pushDamageEvent(attacker, target, outcome, damage, hand);
       if (target.hp <= 0) this.pushDeathEvent(attacker, target);
     } else {
@@ -497,6 +516,56 @@ export class RealtimeCombatEngine {
     return Math.max(...combatant.hands.map((hand) => hand.weapon.range), BASIC_RANGE);
   }
 
+  private projectileHitsObstacle(projectile: Projectile): boolean {
+    return this.obstacles.some((obstacle) => {
+      const halfWidth = obstacle.width / 2;
+      const halfHeight = obstacle.height / 2;
+      const closestX = Math.max(obstacle.position.x - halfWidth, Math.min(projectile.position.x, obstacle.position.x + halfWidth));
+      const closestY = Math.max(obstacle.position.y - halfHeight, Math.min(projectile.position.y, obstacle.position.y + halfHeight));
+      return distance(projectile.position, { x: closestX, y: closestY }) <= projectile.radius;
+    });
+  }
+
+  private combatants(): Combatant[] {
+    return [this.player, ...this.enemies, ...this.allies, ...this.neutrals];
+  }
+
+  private combatantById(id: number): Combatant | undefined {
+    return this.combatants().find((combatant) => combatant.id === id);
+  }
+
+  private canAttack(attacker: Combatant, target: Combatant): boolean {
+    if (attacker.id === target.id || attacker.hp <= 0 || target.hp <= 0) return false;
+    if (attacker.faction === 'player') return target.faction === 'enemy';
+    if (attacker.faction === 'enemy') return target.faction === 'player' || target.faction === 'ally' || target.faction === 'neutral';
+    if (attacker.faction === 'ally') return target.faction === 'enemy';
+    if (attacker.faction === 'neutral') return target.id === attacker.retaliationTargetId;
+    return false;
+  }
+
+  private attackableTargetsFor(attacker: Combatant): Combatant[] {
+    return this.combatants().filter((target) => this.canAttack(attacker, target));
+  }
+
+  private targetFor(attacker: Combatant): Combatant | null {
+    const targets = this.attackableTargetsFor(attacker);
+    if (attacker.faction === 'neutral') {
+      const target = targets.find((candidate) => candidate.id === attacker.retaliationTargetId) ?? null;
+      if (!target) attacker.retaliationTargetId = undefined;
+      return target;
+    }
+    let nearest: Combatant | null = null;
+    let nearestDistance = Infinity;
+    for (const target of targets) {
+      const d = distance(attacker.position, target.position);
+      if (d < nearestDistance) {
+        nearest = target;
+        nearestDistance = d;
+      }
+    }
+    return nearest;
+  }
+
   private checkBattleEnd(): void {
     if (this.result) return;
     if (this.player.hp <= 0) {
@@ -511,7 +580,7 @@ export class RealtimeCombatEngine {
   private actorRef(combatant: Combatant): CombatActorRef {
     return {
       id: combatant.id,
-      side: combatant.kind === 'player' ? 'player' : 'enemy',
+      side: combatant.faction,
       name: combatant.name,
     };
   }
