@@ -1,17 +1,17 @@
 import type { Attributes, BattleSetup } from './types.js';
-import { DEFAULT_WEAPON_ID } from './weaponCatalog.js';
+import { DEFAULT_LOADOUT } from './equipmentCatalog.js';
 
 const DEFAULT_PLAYER_ATTRS: Attributes = { str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 };
 
 export function createDefaultBattleSetup(
   playerAttrs: Attributes = DEFAULT_PLAYER_ATTRS,
-  weaponId = DEFAULT_WEAPON_ID,
+  loadout = DEFAULT_LOADOUT,
 ): BattleSetup {
   return {
     player: {
       name: '玩家',
       attrs: { ...playerAttrs },
-      weaponId,
+      loadout: { ...loadout },
       position: { x: 400, y: 310 },
       facing: -Math.PI / 2,
     },

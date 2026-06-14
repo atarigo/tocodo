@@ -5,6 +5,8 @@ export interface Vec2 {
 
 export type CombatantKind = 'player' | 'meleeEnemy' | 'rangedEnemy';
 export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
+export type EquipmentSlot = 'mainHand' | 'offHand' | 'head' | 'body' | 'legs' | 'feet';
+export type EquipmentLoadout = Record<EquipmentSlot, string | null>;
 
 /** 六主屬性：範圍 0〜255、起始 10；沒有預設數值，基本狀態全由屬性或裝備提供 */
 export interface Attributes {
@@ -26,6 +28,13 @@ export const ATTR_NAMES: Record<keyof Attributes, string> = {
 };
 
 export const ATTR_KEYS: (keyof Attributes)[] = ['str', 'vit', 'agi', 'dex', 'wil', 'luk'];
+
+export interface DefenseStats {
+  armor: number;
+  reductionRate: number;
+  parryRate: number;
+  blockRate: number;
+}
 
 export interface Combatant {
   id: number;
@@ -58,6 +67,8 @@ export interface Combatant {
 export interface WeaponDefinition {
   id: string;
   name: string;
+  slot: 'mainHand';
+  twoHanded: boolean;
   kind: WeaponKind;
   damage: [number, number];
   balance: number;
@@ -69,6 +80,18 @@ export interface WeaponDefinition {
   dexAmp: boolean;
   parryRate: number;
 }
+
+export interface GearDefinition {
+  id: string;
+  name: string;
+  slot: Exclude<EquipmentSlot, 'mainHand'>;
+  armor: number;
+  reductionRate: number;
+  parryRate: number;
+  blockRate: number;
+}
+
+export type EquipmentDefinition = WeaponDefinition | GearDefinition;
 
 export interface EnemyDefinition {
   id: string;
@@ -87,6 +110,7 @@ export interface EnemyDefinition {
   reductionRate: number;
   parryRate: number;
   blockRate: number;
+  loadout: EquipmentLoadout;
 }
 
 export interface EnemySpawn {
@@ -99,7 +123,7 @@ export interface BattleSetup {
   player: {
     name: string;
     attrs: Attributes;
-    weaponId: string;
+    loadout: EquipmentLoadout;
     position: Vec2;
     facing: number;
   };

@@ -2,11 +2,11 @@ import Matter from 'matter-js';
 import { buildAttackTable, resolveDamage, rollOutcome, type AttackOutcome } from './attackTable.js';
 import { createDefaultBattleSetup } from './battleSetup.js';
 import { enemyById } from './enemyCatalog.js';
+import { equipmentDefense, getWeapon, normalizeLoadout } from './equipmentCatalog.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
 import { createRng, type Rng } from './rng.js';
 import type { Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, Projectile, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
-import { getWeapon } from './weaponCatalog.js';
 
 const WALL_THICKNESS = 64;
 const PLAYER_ID = 1;
@@ -59,8 +59,16 @@ function cloneAttrs(attrs: Attributes): Attributes {
   return { ...attrs };
 }
 
-function makeEnemy(id: number, definition: EnemyDefinition, spawn: EnemySpawn, attrsOverride?: Attributes): Combatant {
+function makeEnemy(
+  id: number,
+  definition: EnemyDefinition,
+  spawn: EnemySpawn,
+  attrsOverride?: Attributes,
+): Combatant {
   const attrs = cloneAttrs(attrsOverride ?? definition.attrs);
+  const loadout = normalizeLoadout(definition.loadout);
+  const weapon = getWeapon(loadout);
+  const defense = equipmentDefense(loadout);
   return makeCombatant({
     id,
     kind: definition.kind,
@@ -72,13 +80,14 @@ function makeEnemy(id: number, definition: EnemyDefinition, spawn: EnemySpawn, a
     position: { ...spawn.position },
     facing: spawn.facing ?? 0,
     speed: definition.speed,
-    attackRange: definition.attackRange,
-    attackArc: definition.attackArc,
-    attackCooldown: attackInterval(definition.baseAttackInterval, attrs.agi),
-    armor: definition.armor,
-    reductionRate: definition.reductionRate,
-    parryRate: definition.parryRate,
-    blockRate: definition.blockRate,
+    attackRange: weapon.range,
+    attackArc: weapon.arc,
+    attackCooldown: attackInterval(weapon.interval, attrs.agi, weapon.agiApplies),
+    armor: definition.armor + defense.armor,
+    reductionRate: Math.min(1, definition.reductionRate + defense.reductionRate),
+    parryRate: Math.min(1, definition.parryRate + defense.parryRate),
+    blockRate: Math.min(1, definition.blockRate + defense.blockRate),
+    weapon,
   });
 }
 
@@ -115,7 +124,9 @@ export class RealtimeCombatEngine {
     this.rng = createRng(opts.seed ?? Date.now());
     this.onEvent = opts.onEvent;
     const setup = opts.setup ?? createDefaultBattleSetup();
-    const playerWeapon = getWeapon(setup.player.weaponId);
+    const playerLoadout = normalizeLoadout(setup.player.loadout);
+    const playerWeapon = getWeapon(playerLoadout);
+    const playerDefense = equipmentDefense(playerLoadout);
     this.player = makeCombatant({
       id: PLAYER_ID,
       kind: 'player',
@@ -129,10 +140,10 @@ export class RealtimeCombatEngine {
       attackRange: playerWeapon.range,
       attackArc: playerWeapon.arc,
       attackCooldown: attackInterval(playerWeapon.interval, setup.player.attrs.agi, playerWeapon.agiApplies),
-      armor: 0,
-      reductionRate: 0,
-      parryRate: playerWeapon.parryRate,
-      blockRate: 0,
+      armor: playerDefense.armor,
+      reductionRate: playerDefense.reductionRate,
+      parryRate: playerDefense.parryRate,
+      blockRate: playerDefense.blockRate,
       weapon: playerWeapon,
     });
 

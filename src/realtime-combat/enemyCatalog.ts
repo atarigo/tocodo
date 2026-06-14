@@ -16,6 +16,14 @@ export const ENEMY_CATALOG: Record<string, EnemyDefinition> = {
     reductionRate: 0,
     parryRate: 0,
     blockRate: 0,
+    loadout: {
+      mainHand: 'iron-sword',
+      offHand: 'wooden-shield',
+      head: 'leather-cap',
+      body: 'leather-armor',
+      legs: 'leather-pants',
+      feet: 'leather-boots',
+    },
   },
   orangeGuard: {
     id: 'orangeGuard',
@@ -32,6 +40,14 @@ export const ENEMY_CATALOG: Record<string, EnemyDefinition> = {
     reductionRate: 0,
     parryRate: 0,
     blockRate: 0,
+    loadout: {
+      mainHand: 'greatsword',
+      offHand: null,
+      head: 'iron-helm',
+      body: 'iron-armor',
+      legs: 'iron-greaves',
+      feet: 'iron-boots',
+    },
   },
   purpleShooter: {
     id: 'purpleShooter',
@@ -50,6 +66,14 @@ export const ENEMY_CATALOG: Record<string, EnemyDefinition> = {
     reductionRate: 0,
     parryRate: 0,
     blockRate: 0,
+    loadout: {
+      mainHand: 'hunting-bow',
+      offHand: null,
+      head: 'leather-cap',
+      body: 'leather-armor',
+      legs: 'leather-pants',
+      feet: 'leather-boots',
+    },
   },
 };
 

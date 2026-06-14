@@ -3,20 +3,20 @@
   import { Application, Container, Graphics, Text } from 'pixi.js';
   import { createDefaultBattleSetup } from './battleSetup.js';
   import { RealtimeCombatEngine } from './engine.js';
-  import type { Attributes, CombatEvent, Combatant, InputState, Strike, Vec2 } from './types.js';
+  import type { Attributes, CombatEvent, Combatant, EquipmentLoadout, InputState, Strike, Vec2 } from './types.js';
   import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
   let {
     onEvent,
     playerAttrs,
     enemyAttrs,
-    weaponId,
+    playerLoadout,
     sessionId,
   }: {
     onEvent?: (event: CombatEvent) => void;
     playerAttrs: Attributes;
     enemyAttrs: Attributes;
-    weaponId: string;
+    playerLoadout: EquipmentLoadout;
     sessionId: number;
   } = $props();
 
@@ -167,10 +167,11 @@
 
   onMount(() => {
     let destroyed = false;
+    const setup = createDefaultBattleSetup(playerAttrs, playerLoadout);
     const localEngine = new RealtimeCombatEngine({
       seed: sessionId,
       onEvent,
-      setup: createDefaultBattleSetup(playerAttrs, weaponId),
+      setup,
       enemyAttrsOverride: enemyAttrs,
     });
     engine = localEngine;
