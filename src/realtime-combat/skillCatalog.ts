@@ -1,20 +1,43 @@
-import type { SkillId } from './types.js';
+import type { SkillId, StatusId } from './types.js';
+
+export type SkillTargetType = 'self' | 'enemy';
+
+export type SkillEffect =
+  | {
+      kind: 'moveToTarget';
+      stopDistanceBonus: number;
+    }
+  | {
+      kind: 'damage';
+      multiplier: number;
+    }
+  | {
+      kind: 'applyStatus';
+      statusId: StatusId;
+      chance: number;
+      duration: number;
+      amount:
+        | {
+            kind: 'damageRatio';
+            ratio: number;
+          }
+        | {
+            kind: 'targetMaxHpRatio';
+            ratio: number;
+          };
+    };
 
 export interface SkillDefinition {
   id: SkillId;
   name: string;
   cooldown: number;
-  damageMultiplier: number;
+  targetType: SkillTargetType;
+  effects: SkillEffect[];
+  requiresMeleeRange?: boolean;
+  requiresLineOfSight?: boolean;
   minRange?: number;
   maxRange?: number;
-  bleedChance?: number;
-  bleedDuration?: number;
-  bleedTickInterval?: number;
-  bleedDamageRatio?: number;
   mpCost?: number;
-  healPerSecondRatio?: number;
-  healDuration?: number;
-  healTickInterval?: number;
 }
 
 export const SKILLS: Record<SkillId, SkillDefinition> = {
@@ -22,29 +45,48 @@ export const SKILLS: Record<SkillId, SkillDefinition> = {
     id: 'charge',
     name: '衝鋒',
     cooldown: 15,
-    damageMultiplier: 0.3,
+    targetType: 'enemy',
     minRange: 110,
     maxRange: 260,
+    requiresLineOfSight: true,
+    effects: [
+      { kind: 'moveToTarget', stopDistanceBonus: 4 },
+      { kind: 'damage', multiplier: 0.3 },
+    ],
   },
   bite: {
     id: 'bite',
     name: '撕咬',
     cooldown: 4,
-    damageMultiplier: 0.8,
-    bleedChance: 1,
-    bleedDuration: 8,
-    bleedTickInterval: 1,
-    bleedDamageRatio: 0.2,
+    targetType: 'enemy',
+    requiresMeleeRange: true,
+    requiresLineOfSight: true,
+    effects: [
+      { kind: 'damage', multiplier: 0.8 },
+      {
+        kind: 'applyStatus',
+        statusId: 'bleed',
+        chance: 1,
+        duration: 8,
+        amount: { kind: 'damageRatio', ratio: 0.2 },
+      },
+    ],
   },
   heal: {
     id: 'heal',
     name: '治療術',
     cooldown: 20,
-    damageMultiplier: 0,
+    targetType: 'self',
     mpCost: 2,
-    healPerSecondRatio: 0.02,
-    healDuration: 16,
-    healTickInterval: 1,
+    effects: [
+      {
+        kind: 'applyStatus',
+        statusId: 'healing',
+        chance: 1,
+        duration: 16,
+        amount: { kind: 'targetMaxHpRatio', ratio: 0.02 },
+      },
+    ],
   },
 };
 

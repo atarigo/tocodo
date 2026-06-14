@@ -8,6 +8,7 @@ import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './f
 import { itemById } from './itemCatalog.js';
 import { createRng, type Rng } from './rng.js';
 import { skillById, type SkillDefinition } from './skillCatalog.js';
+import { statusById } from './statusCatalog.js';
 import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, ItemId, Projectile, SkillId, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
@@ -258,7 +259,9 @@ export class RealtimeCombatEngine {
   usePlayerSkillSlot(slotIndex: number): void {
     const skillId = this.player.skillSlots[slotIndex];
     if (!skillId || this.result || this.player.hp <= 0) return;
-    if (skillId === 'heal') this.useHeal(this.player, skillById(skillId));
+    const skill = skillById(skillId);
+    const target = skill.targetType === 'self' ? this.player : this.targetFor(this.player);
+    if (target) this.useSkill(this.player, target, skill);
   }
 
   usePlayerItemSlot(slotIndex: number): void {
@@ -613,103 +616,112 @@ export class RealtimeCombatEngine {
   }
 
   private tryUseSkill(attacker: Combatant, target: Combatant, distanceToTarget: number): boolean {
-    if (attacker.skills.includes('charge') && (attacker.skillCooldowns.charge ?? 0) === 0) {
-      const skill = skillById('charge');
-      if (distanceToTarget >= (skill.minRange ?? 0) && distanceToTarget <= (skill.maxRange ?? Infinity)) {
-        this.useCharge(attacker, target, skill);
-        return true;
-      }
+    for (const skillId of attacker.skills) {
+      const skill = skillById(skillId);
+      if (!this.canUseSkill(attacker, target, skill, distanceToTarget)) continue;
+      this.useSkill(attacker, target, skill);
+      return true;
     }
-
-    if (attacker.skills.includes('bite') && (attacker.skillCooldowns.bite ?? 0) === 0) {
-      const skill = skillById('bite');
-      const hand = attacker.hands.find((item) => item.weapon.attackMode === 'melee') ?? attacker.hands[0];
-      if (hand && targetInMeleeRange(attacker, target, hand) && this.hasLineOfSight(attacker.position, target.position)) {
-        this.useBite(attacker, target, skill, hand);
-        return true;
-      }
-    }
-
     return false;
   }
 
-  private useCharge(attacker: Combatant, target: Combatant, skill: SkillDefinition): void {
+  private canUseSkill(attacker: Combatant, target: Combatant, skill: SkillDefinition, distanceToTarget = distance(attacker.position, target.position)): boolean {
+    if ((attacker.skillCooldowns[skill.id] ?? 0) > 0 || attacker.mp < (skill.mpCost ?? 0)) return false;
+    if (skill.targetType === 'self' && attacker.id !== target.id) return false;
+    if (skill.targetType === 'enemy' && !this.canAttack(attacker, target)) return false;
+    if (distanceToTarget < (skill.minRange ?? 0) || distanceToTarget > (skill.maxRange ?? Infinity)) return false;
+    const meleeHand = this.meleeHandFor(attacker);
+    if (skill.requiresMeleeRange && (!meleeHand || !targetInMeleeRange(attacker, target, meleeHand))) return false;
+    if (skill.requiresLineOfSight && !this.hasLineOfSight(attacker.position, target.position)) return false;
+    return true;
+  }
+
+  private useSkill(attacker: Combatant, target: Combatant, skill: SkillDefinition): void {
+    if (!this.canUseSkill(attacker, target, skill)) return;
+    attacker.mp = Math.max(0, attacker.mp - (skill.mpCost ?? 0));
+    attacker.skillCooldowns[skill.id] = skill.cooldown;
+
+    let lastDamage = 0;
+    for (const effect of skill.effects) {
+      if (effect.kind === 'moveToTarget') {
+        this.moveNearTarget(attacker, target, effect.stopDistanceBonus);
+        continue;
+      }
+      if (effect.kind === 'damage') {
+        const hand = this.meleeHandFor(attacker) ?? attacker.hands[0];
+        lastDamage = this.resolveAttackWithWeapon(attacker, target, hand?.weapon, hand?.side, effect.multiplier, skill.name);
+        if (lastDamage > 0) {
+          target.flash = 0.22;
+          this.addImpact(target.position);
+          this.addDamageText(target.position, lastDamage);
+        }
+        continue;
+      }
+      if (effect.kind === 'applyStatus') {
+        if (this.rng() >= effect.chance) continue;
+        if (effect.amount.kind === 'damageRatio' && lastDamage <= 0) continue;
+        const amountPerTick = effect.amount.kind === 'damageRatio' ? Math.max(1, Math.round(lastDamage * effect.amount.ratio)) : Math.max(1, Math.round(target.maxHp * effect.amount.ratio));
+        if (amountPerTick > 0) this.applyStatus(attacker, target, effect.statusId, amountPerTick, effect.duration);
+      }
+    }
+  }
+
+  private moveNearTarget(attacker: Combatant, target: Combatant, stopDistanceBonus: number): void {
     const dir = normalize({
       x: attacker.position.x - target.position.x,
       y: attacker.position.y - target.position.y,
     });
-    const stopDistance = attacker.radius + target.radius + 4;
+    const stopDistance = attacker.radius + target.radius + stopDistanceBonus;
     this.moveBodyTo(attacker, {
       x: target.position.x + dir.x * stopDistance,
       y: target.position.y + dir.y * stopDistance,
     });
     attacker.facing = angleTo(attacker.position, target.position);
-    attacker.skillCooldowns.charge = skill.cooldown;
-    const hand = attacker.hands[0];
-    const damage = this.resolveAttackWithWeapon(attacker, target, hand?.weapon, hand?.side, skill.damageMultiplier, skill.name);
-    if (damage > 0) {
-      target.flash = 0.22;
-      this.addImpact(target.position);
-      this.addDamageText(target.position, damage);
-    }
   }
 
-  private useBite(attacker: Combatant, target: Combatant, skill: SkillDefinition, hand: CombatHand): void {
-    attacker.skillCooldowns.bite = skill.cooldown;
-    const damage = this.resolveAttackWithWeapon(attacker, target, hand.weapon, hand.side, skill.damageMultiplier, skill.name);
-    if (damage > 0) {
-      target.flash = 0.22;
-      this.addImpact(target.position);
-      this.addDamageText(target.position, damage);
-      if (this.rng() < (skill.bleedChance ?? 0)) {
-        this.applyBleed(attacker, target, Math.max(1, Math.round(damage * (skill.bleedDamageRatio ?? 0))), skill);
-      }
+  private applyStatus(source: Combatant, target: Combatant, statusId: StatusEffect['statusId'], amountPerTick: number, duration: number): void {
+    const status = statusById(statusId);
+    const existingIndex = this.statusEffects.findIndex((effect) => effect.statusId === statusId && effect.sourceId === source.id && effect.targetId === target.id);
+    if (existingIndex >= 0 && status.stackRule === 'refresh') {
+      const existing = this.statusEffects[existingIndex];
+      existing.amountPerTick = amountPerTick;
+      existing.remaining = duration;
+      existing.tickInterval = status.tickInterval;
+      existing.tickTimer = status.tickInterval;
+      this.pushStatusEvent(source, target, status.name, 'apply');
+      return;
     }
-  }
-
-  private applyBleed(attacker: Combatant, target: Combatant, damagePerTick: number, skill: SkillDefinition): void {
+    if (existingIndex >= 0 && status.stackRule === 'replace') {
+      this.statusEffects.splice(existingIndex, 1);
+    }
     this.statusEffects.push({
       id: this.nextEffectId++,
-      statusId: 'bleed',
-      name: '出血',
-      sourceId: attacker.id,
+      statusId,
+      name: status.name,
+      kind: status.kind,
+      stackRule: status.stackRule,
+      sourceId: source.id,
       targetId: target.id,
-      amountPerTick: damagePerTick,
-      effectType: 'damage',
-      remaining: skill.bleedDuration ?? 3,
-      tickInterval: skill.bleedTickInterval ?? 1,
-      tickTimer: skill.bleedTickInterval ?? 1,
+      amountPerTick,
+      effectType: status.effectType,
+      remaining: duration,
+      tickInterval: status.tickInterval,
+      tickTimer: status.tickInterval,
     });
-    this.pushStatusEvent(attacker, target, '出血', 'apply');
-  }
-
-  private useHeal(target: Combatant, skill: SkillDefinition): void {
-    if ((target.skillCooldowns.heal ?? 0) > 0 || target.mp < (skill.mpCost ?? 0)) return;
-    target.mp = Math.max(0, target.mp - (skill.mpCost ?? 0));
-    target.skillCooldowns.heal = skill.cooldown;
-    this.statusEffects.push({
-      id: this.nextEffectId++,
-      statusId: 'healing',
-      name: '治療術',
-      sourceId: target.id,
-      targetId: target.id,
-      amountPerTick: Math.max(1, Math.round(target.maxHp * (skill.healPerSecondRatio ?? 0))),
-      effectType: 'heal',
-      remaining: skill.healDuration ?? 16,
-      tickInterval: skill.healTickInterval ?? 1,
-      tickTimer: skill.healTickInterval ?? 1,
-    });
-    this.pushStatusEvent(target, target, '治療術', 'apply');
+    this.pushStatusEvent(source, target, status.name, 'apply');
   }
 
   private useItem(target: Combatant, itemId: ItemId, slotIndex: number): void {
     const item = itemById(itemId);
     target.itemUsed[slotIndex] = true;
-    const heal = Math.max(1, Math.round(target.maxHp * item.healHpRatio));
-    const applied = Math.max(0, Math.min(heal, target.maxHp - target.hp));
-    target.hp = Math.min(target.maxHp, target.hp + heal);
-    this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
-    this.pushResourceEvent(target, target, 'hp', applied, item.name);
+    for (const effect of item.effects) {
+      if (effect.kind !== 'heal' || effect.resource !== 'hp') continue;
+      const heal = Math.max(1, Math.round(target.maxHp * effect.ratio));
+      const applied = Math.max(0, Math.min(heal, target.maxHp - target.hp));
+      target.hp = Math.min(target.maxHp, target.hp + heal);
+      this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
+      this.pushResourceEvent(target, target, 'hp', applied, item.name);
+    }
   }
 
   private tickStatusEffects(dt: number): void {
@@ -794,6 +806,10 @@ export class RealtimeCombatEngine {
 
   private hasProjectileAttack(combatant: Combatant): boolean {
     return combatant.hands.some((hand) => hand.weapon.attackMode === 'projectile');
+  }
+
+  private meleeHandFor(combatant: Combatant): CombatHand | undefined {
+    return combatant.hands.find((hand) => hand.weapon.attackMode === 'melee');
   }
 
   private maxAttackRange(combatant: Combatant): number {

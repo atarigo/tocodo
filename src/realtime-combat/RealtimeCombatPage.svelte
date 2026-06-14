@@ -136,7 +136,7 @@
       <div class="stage-actions">
         <div class="status-badges">
           {#each playerStatuses as status (status.id)}
-            <div class="status-badge" class:buff-badge={status.effectType === 'heal'}>
+            <div class="status-badge" class:buff-badge={status.kind === 'buff'}>
               <span>{status.name}</span>
               <strong>{Math.max(0, status.remaining).toFixed(1)}s</strong>
             </div>

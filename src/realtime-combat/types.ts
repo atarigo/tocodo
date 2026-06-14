@@ -13,6 +13,8 @@ export type DifficultyRank = 'D' | 'C' | 'B' | 'A' | 'S';
 export type SkillId = 'charge' | 'bite' | 'heal';
 export type ItemId = 'smallHealthPotion';
 export type StatusId = 'bleed' | 'healing';
+export type StatusKind = 'buff' | 'debuff';
+export type StatusStackRule = 'stack' | 'refresh' | 'replace';
 export type EquipmentSlot = 'mainHand' | 'offHand' | 'head' | 'body' | 'legs' | 'feet';
 export type EquipmentLoadout = Record<EquipmentSlot, string | null>;
 export interface ActionLoadout {
@@ -240,6 +242,8 @@ export interface StatusEffect {
   id: number;
   statusId: StatusId;
   name: string;
+  kind: StatusKind;
+  stackRule: StatusStackRule;
   sourceId: number;
   targetId: number;
   amountPerTick: number;
