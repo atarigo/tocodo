@@ -6,8 +6,6 @@
   <h1>世界</h1>
   <p class="tagline">穿梭副本、自由配裝的 Roguelite</p>
   <div class="landing-actions">
-    <button class="primary" onclick={() => navigate('/game')}>進入遊戲</button>
-    <button onclick={() => navigate('/realtime-combat')}>即時戰鬥</button>
-    <button onclick={() => navigate('/playground')}>實驗室</button>
+    <button class="primary" onclick={() => navigate('/playground')}>進入遊戲</button>
   </div>
 </main>

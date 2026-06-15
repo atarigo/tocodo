@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { attrRank, attrUpgradeCost } from '../game/economy.js';
+  import { attrRank, attrUpgradeCost } from './economy.js';
   import { navigate } from '../web/router.svelte.js';
   import type {
     ActionBarState,

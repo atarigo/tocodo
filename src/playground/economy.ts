@@ -1,9 +1,9 @@
-import type { Priced, Rank } from '../core/types.js';
+import type { DifficultyRank } from './types.js';
 
 // ─ 屬性升級花費（已定案 2026-06-12；A/S 級調漲）─
 // 起始 10、上限 255；費用依「目標值」所在區間計價，區間即屬性的階級標記。
 // 單屬性點滿 769,000；六邊形全滿 4,614,000。
-const ATTR_BRACKETS: { max: number; cost: number; rank: Rank }[] = [
+const ATTR_BRACKETS: { max: number; cost: number; rank: DifficultyRank }[] = [
   { max: 50, cost: 100, rank: 'D' },
   { max: 100, cost: 300, rank: 'C' },
   { max: 150, cost: 1000, rank: 'B' },
@@ -15,7 +15,7 @@ export const ATTR_START = 10;
 export const ATTR_MAX = 255;
 
 /** 屬性目前值的階級標記 */
-export function attrRank(value: number): Rank {
+export function attrRank(value: number): DifficultyRank {
   for (const bracket of ATTR_BRACKETS) {
     if (value <= bracket.max) return bracket.rank;
   }
@@ -40,15 +40,3 @@ export function attrTotalSpent(value: number): number {
   return total;
 }
 
-/**
- * 一般商店是否販售：沒有 price 的內容不出售（通常較強或特殊，只能副本取得）。
- * secretPrice 屬於秘密商店，這裡不處理。
- */
-export function shopPrice(item: Priced): number | null {
-  return item.price ?? null;
-}
-
-/** 攻克一層的貨幣報酬（暫定，配合屬性花費的量級） */
-export function floorReward(floor: number, isBoss: boolean): number {
-  return (40 + 30 * floor) * (isBoss ? 2 : 1);
-}
