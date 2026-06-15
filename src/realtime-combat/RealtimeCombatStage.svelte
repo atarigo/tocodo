@@ -136,35 +136,6 @@
     layer.addChild(g);
   }
 
-  function drawDashedCircle(layer: Container, center: Vec2, radius: number, color: number, alpha: number, width: number): void {
-    const g = new Graphics();
-    const segments = 96;
-    const dash = 6;
-    const gap = 5;
-    const step = (Math.PI * 2) / segments;
-    for (let i = 0; i < segments; i += 1) {
-      const arcLength = radius * step;
-      const cycle = dash + gap;
-      if ((i * arcLength) % cycle > dash) continue;
-      const start = i * step;
-      const end = start + step * 0.82;
-      g.arc(0, 0, radius, start, end);
-    }
-    g.stroke({ color, width, alpha });
-    g.position.set(center.x, center.y);
-    layer.addChild(g);
-  }
-
-  function drawAlertRange(layer: Container, combatant: Combatant): void {
-    if (combatant.faction === 'player') return;
-    if (combatant.leashRange > 0) {
-      drawDashedCircle(layer, combatant.homePosition, combatant.leashRange, 0xf0b84b, combatant.aiState === 'combat' ? 0.22 : 0.3, 2);
-    }
-    if (combatant.alertRange > 0) {
-      drawDashedCircle(layer, combatant.homePosition, combatant.alertRange, 0xff4d42, combatant.aiState === 'combat' ? 0.28 : 0.42, 2);
-    }
-  }
-
   function render(): void {
     if (!engine || !entitiesLayer || !effectsLayer || !projectilesLayer) return;
 
@@ -179,10 +150,6 @@
       g.position.set(obstacle.position.x, obstacle.position.y);
       entitiesLayer.addChild(g);
     }
-
-    for (const enemy of engine.enemies) drawAlertRange(entitiesLayer, enemy);
-    for (const ally of engine.allies) drawAlertRange(entitiesLayer, ally);
-    for (const neutral of engine.neutrals) drawAlertRange(entitiesLayer, neutral);
 
     for (const strike of engine.strikes) drawStrike(effectsLayer, strike);
     for (const impact of engine.impacts) {
