@@ -1,4 +1,4 @@
-import type { DefenseStats, EquipmentDefinition, EquipmentLoadout, EquipmentSlot, GearDefinition, WeaponDefinition } from './types.js';
+import type { DefenseStats, EquipmentDefinition, EquipmentLoadout, EquipmentSlot, GearDefinition, WeaponDefinition } from '../core/types.js';
 import { NATURAL_EQUIPMENT } from './naturalEquipmentCatalog.js';
 
 export const EQUIPMENT_SLOT_LABELS: Record<EquipmentSlot, string> = {

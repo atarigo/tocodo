@@ -1,4 +1,4 @@
-import type { EquipmentDefinition, GearDefinition, WeaponDefinition } from './types.js';
+import type { EquipmentDefinition, GearDefinition, WeaponDefinition } from '../core/types.js';
 
 export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   {

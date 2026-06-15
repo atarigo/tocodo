@@ -1,4 +1,4 @@
-import type { StatusId, StatusKind, StatusStackRule } from './types.js';
+import type { StatusId, StatusKind, StatusStackRule } from '../core/types.js';
 
 export interface StatusDefinition {
   id: StatusId;

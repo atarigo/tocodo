@@ -1,5 +1,5 @@
-import type { Attributes, DifficultyRank } from './types.js';
-import type { Rng } from './rng.js';
+import type { Attributes, DifficultyRank } from '../core/types.js';
+import type { Rng } from '../core/rng.js';
 
 export const DIFFICULTY_LABELS: Record<DifficultyRank, string> = {
   D: 'D 級',

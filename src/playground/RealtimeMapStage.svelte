@@ -1,8 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { Application, Container, Graphics, Text } from 'pixi.js';
+  import { DEFAULT_LOADOUT } from '../data/equipmentCatalog.js';
   import type { GameScene } from './gameFlow.js';
-  import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
+  import { drawPlayerSprite } from './playerSprite.js';
+  import type { EquipmentLoadout } from '../core/types.js';
+  import { ARENA_HEIGHT, ARENA_WIDTH } from '../core/types.js';
 
   export interface MapNearbyState {
     novicePortal: boolean;
@@ -15,9 +18,11 @@
 
   let {
     scene,
+    playerLoadout = DEFAULT_LOADOUT,
     onNearbyChange,
   }: {
     scene: GameScene;
+    playerLoadout?: EquipmentLoadout;
     onNearbyChange?: (state: MapNearbyState) => void;
   } = $props();
 
@@ -28,6 +33,9 @@
 
   const keys = new Set<string>();
   const player = { x: 240, y: 410 };
+  let elapsed = 0;
+  let facing = -Math.PI / 2;
+  let moving = false;
   let lastScene = $state<GameScene | null>(null);
 
   const starts: Partial<Record<GameScene, { x: number; y: number }>> = {
@@ -77,9 +85,11 @@
     if (keys.has('KeyD') || keys.has('ArrowRight')) dx += 1;
     if (keys.has('KeyW') || keys.has('ArrowUp')) dy -= 1;
     if (keys.has('KeyS') || keys.has('ArrowDown')) dy += 1;
-    if (dx === 0 && dy === 0) return;
+    moving = dx !== 0 || dy !== 0;
+    if (!moving) return;
     const length = Math.hypot(dx, dy) || 1;
     const speed = 170;
+    facing = Math.atan2(dy, dx);
     player.x = clamp(player.x + (dx / length) * speed * dt, 34, ARENA_WIDTH - 34);
     player.y = clamp(player.y + (dy / length) * speed * dt, 42, ARENA_HEIGHT - 42);
   }
@@ -178,7 +188,14 @@
     if (scene === 'noviceReward') drawReward(world, '新手獎勵');
     if (scene === 'rewardPlatform') drawReward(world, '結算核心');
     if (scene === 'city') drawCity(world);
-    drawCircle(world, player.x, player.y, 16, 0x69c981, '玩家', 0xd8ffe3);
+    drawPlayerSprite(world, {
+      elapsed,
+      facing,
+      label: '玩家',
+      loadout: playerLoadout,
+      moving,
+      position: player,
+    });
   }
 
   function resize(): void {
@@ -238,6 +255,7 @@
         const now = performance.now();
         const dt = Math.min(0.05, (now - last) / 1000);
         last = now;
+        elapsed += dt;
         move(dt);
         emitNearby();
         drawScene();

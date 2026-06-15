@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { ATTR_KEYS, ATTR_NAMES, type ActionLoadout, type Attributes, type BattleSetup, type DifficultyRank, type EnemySpawn, type EquipmentDefinition, type EquipmentLoadout, type EquipmentSlot, type ItemId, type SkillId, type WeaponDefinition } from './types.js';
-  import { attackInterval, maxHp, maxMp } from './formulas.js';
+  import { ATTR_KEYS, ATTR_NAMES, type ActionLoadout, type Attributes, type BattleSetup, type DifficultyRank, type EnemySpawn, type EquipmentDefinition, type EquipmentLoadout, type EquipmentSlot, type ItemId, type SkillId, type WeaponDefinition } from '../core/types.js';
+  import { attackInterval, maxHp, maxMp } from '../core/formulas.js';
   import {
     EQUIPMENT_SLOT_LABELS,
     equipmentDefense,
@@ -9,10 +9,10 @@
     getOffhandWeapon,
     getWeapon,
     normalizeLoadout,
-  } from './equipmentCatalog.js';
-  import { DIFFICULTY_LABELS, DIFFICULTY_RANKS } from './enemyScaling.js';
-  import { ITEMS, itemById } from './itemCatalog.js';
-  import { SKILLS, skillById } from './skillCatalog.js';
+  } from '../data/equipmentCatalog.js';
+  import { DIFFICULTY_LABELS, DIFFICULTY_RANKS } from '../data/enemyScaling.js';
+  import { ITEMS, itemById } from '../data/itemCatalog.js';
+  import { SKILLS, skillById } from '../data/skillCatalog.js';
 
   let {
     playerAttrs = $bindable(),

@@ -1,4 +1,4 @@
-import type { ItemId } from './types.js';
+import type { ItemId } from '../core/types.js';
 
 export interface ItemDefinition {
   id: ItemId;

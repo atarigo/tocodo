@@ -1,6 +1,6 @@
-import { createRng, pick } from './rng.js';
+import { createRng, pick } from '../core/rng.js';
 import { scaledEnemyAttrs, type EnemyArchetypeId } from './enemyScaling.js';
-import type { DifficultyRank, EnemySpawn, Vec2 } from './types.js';
+import type { DifficultyRank, EnemySpawn, Vec2 } from '../core/types.js';
 
 interface EncounterMember {
   enemyId: EnemyArchetypeId;

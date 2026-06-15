@@ -1,15 +1,15 @@
 import Matter from 'matter-js';
-import { getDefaultAmmo } from './ammoCatalog.js';
+import { getDefaultAmmo } from '../data/ammoCatalog.js';
 import { buildAttackTable, resolveDamage, rollOutcome, type AttackOutcome } from './attackTable.js';
 import { createDefaultBattleSetup } from './battleSetup.js';
-import { enemyById } from './enemyCatalog.js';
-import { equipmentDefense, getOffhandWeapon, getWeapon, normalizeLoadout } from './equipmentCatalog.js';
+import { enemyById } from '../data/enemyCatalog.js';
+import { equipmentDefense, getOffhandWeapon, getWeapon, normalizeLoadout } from '../data/equipmentCatalog.js';
 import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
-import { itemById } from './itemCatalog.js';
+import { itemById } from '../data/itemCatalog.js';
 import { createRng, type Rng } from './rng.js';
-import { skillById, type SkillDefinition } from './skillCatalog.js';
-import { statusById } from './statusCatalog.js';
-import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, Impact, InputState, ItemId, Projectile, SkillFailureReason, SkillId, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
+import { skillById, type SkillDefinition } from '../data/skillCatalog.js';
+import { statusById } from '../data/statusCatalog.js';
+import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, EquipmentLoadout, Impact, InputState, ItemId, Projectile, SkillFailureReason, SkillId, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;

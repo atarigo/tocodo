@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { attrRank, attrUpgradeCost } from './economy.js';
+  import { attrRank, attrUpgradeCost } from '../core/economy.js';
   import { navigate } from '../web/router.svelte.js';
   import type {
     ActionBarState,
@@ -14,12 +14,12 @@
     EquipmentLoadout,
     SkillFailureReason,
     StatusEffect,
-  } from './types.js';
+  } from '../core/types.js';
   import AttributePanel from './AttributePanel.svelte';
   import RealtimeMapStage, { type MapNearbyState } from './RealtimeMapStage.svelte';
   import RealtimeCombatStage from './RealtimeCombatStage.svelte';
-  import { DEFAULT_ACTION_LOADOUT } from './battleSetup.js';
-  import { DEFAULT_LOADOUT } from './equipmentCatalog.js';
+  import { DEFAULT_ACTION_LOADOUT } from '../core/battleSetup.js';
+  import { DEFAULT_LOADOUT, normalizeLoadout } from '../data/equipmentCatalog.js';
   import {
     createDungeonStageSetup,
     emptyRunStats,
@@ -32,8 +32,8 @@
     type NoviceDifficulty,
     type NoviceRewardChoice,
   } from './gameFlow.js';
-  import { itemById } from './itemCatalog.js';
-  import { skillById } from './skillCatalog.js';
+  import { itemById } from '../data/itemCatalog.js';
+  import { skillById } from '../data/skillCatalog.js';
 
   let events = $state<CombatEvent[]>([]);
   let playerAttrs = $state<Attributes>({ str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 });
@@ -317,14 +317,14 @@
         </div>
       </div>
     {:else if scene === 'novicePlaza'}
-      <RealtimeMapStage {scene} onNearbyChange={(state) => (nearby = state)} />
+      <RealtimeMapStage {scene} {playerLoadout} onNearbyChange={(state) => (nearby = state)} />
     {:else if scene === 'noviceReward'}
-      <RealtimeMapStage {scene} onNearbyChange={(state) => (nearby = state)} />
+      <RealtimeMapStage {scene} {playerLoadout} onNearbyChange={(state) => (nearby = state)} />
     {:else if scene === 'dungeon' && battleSetup && currentStage}
       {#key sessionId}
         <RealtimeCombatStage
           onEvent={addEvent}
-          onPlayerActionState={(state) => (playerActionState = state)}
+                   onPlayerActionState={(state) => (playerActionState = state)}
           onPlayerStatuses={(statuses) => (playerStatuses = statuses)}
           onSnapshot={updateStageSnapshot}
           setup={battleSetup}
@@ -343,9 +343,9 @@
         <div>準備戰鬥</div>
       </div>
     {:else if scene === 'rewardPlatform'}
-      <RealtimeMapStage {scene} onNearbyChange={(state) => (nearby = state)} />
+      <RealtimeMapStage {scene} {playerLoadout} onNearbyChange={(state) => (nearby = state)} />
     {:else if scene === 'city'}
-      <RealtimeMapStage {scene} onNearbyChange={(state) => (nearby = state)} />
+      <RealtimeMapStage {scene} {playerLoadout} onNearbyChange={(state) => (nearby = state)} />
     {/if}
 
     {#if scene === 'novicePlaza' || scene === 'noviceReward' || scene === 'rewardPlatform' || scene === 'city'}

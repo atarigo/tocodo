@@ -1,4 +1,4 @@
-import type { SkillId, StatusId } from './types.js';
+import type { SkillId, StatusId } from '../core/types.js';
 
 export type SkillTargetType = 'self' | 'enemy';
 

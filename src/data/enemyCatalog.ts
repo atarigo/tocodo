@@ -1,4 +1,4 @@
-import type { EnemyDefinition } from './types.js';
+import type { EnemyDefinition } from '../core/types.js';
 
 export const ENEMY_CATALOG: Record<string, EnemyDefinition> = {
   redScout: {

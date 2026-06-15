@@ -1,6 +1,6 @@
 import type { ActionLoadout, ArenaObstacle, Attributes, BattleSetup, DifficultyRank, EquipmentLoadout } from './types.js';
-import { createEncounterSpawns } from './encounterCatalog.js';
-import { DEFAULT_LOADOUT } from './equipmentCatalog.js';
+import { createEncounterSpawns } from '../data/encounterCatalog.js';
+import { DEFAULT_LOADOUT } from '../data/equipmentCatalog.js';
 import { createRng } from './rng.js';
 
 const DEFAULT_PLAYER_ATTRS: Attributes = { str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 };

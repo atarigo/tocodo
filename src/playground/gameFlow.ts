@@ -1,6 +1,6 @@
-import type { ActionLoadout, Attributes, BattleSetup, DifficultyRank, EnemySpawn, EquipmentLoadout } from './types.js';
-import { DEFAULT_ACTION_LOADOUT } from './battleSetup.js';
-import { enemyById } from './enemyCatalog.js';
+import type { ActionLoadout, Attributes, BattleSetup, DifficultyRank, EnemySpawn, EquipmentLoadout } from '../core/types.js';
+import { DEFAULT_ACTION_LOADOUT } from '../core/battleSetup.js';
+import { enemyById } from '../data/enemyCatalog.js';
 
 export type GameScene = 'landing' | 'novicePlaza' | 'noviceReward' | 'dungeon' | 'rewardPlatform' | 'city';
 export type NoviceDifficulty = 1 | 2 | 3;

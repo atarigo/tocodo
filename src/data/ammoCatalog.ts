@@ -1,4 +1,4 @@
-import type { AmmoDefinition, AmmoType } from './types.js';
+import type { AmmoDefinition, AmmoType } from '../core/types.js';
 
 export const AMMO: readonly AmmoDefinition[] = [
   {

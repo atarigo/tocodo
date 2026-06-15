@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { Application, Container, Graphics, Text } from 'pixi.js';
-  import { RealtimeCombatEngine } from './engine.js';
-  import type { ActionBarState, BattleSetup, CombatEvent, Combatant, CombatStageSnapshot, InputState, StatusEffect, Strike, Vec2 } from './types.js';
-  import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
+  import { RealtimeCombatEngine } from '../core/engine.js';
+  import { handLoadout, drawPlayerSprite } from './playerSprite.js';
+  import type { ActionBarState, BattleSetup, CombatEvent, Combatant, CombatStageSnapshot, InputState, StatusEffect, Strike, Vec2 } from '../core/types.js';
+  import { ARENA_HEIGHT, ARENA_WIDTH } from '../core/types.js';
 
   let {
     onEvent,
@@ -65,6 +66,21 @@
   }
 
   function drawCombatant(layer: Container, combatant: Combatant): void {
+    if (combatant.faction === 'player') {
+      drawPlayerSprite(layer, {
+        elapsed,
+        facing: combatant.facing,
+        flash: combatant.flash,
+        hpRatio: combatant.maxHp > 0 ? combatant.hp / combatant.maxHp : 0,
+        label: combatant.name,
+        loadout: handLoadout(combatant.hands),
+        moving: Math.hypot(input.move.x, input.move.y) > 0,
+        mpRatio: combatant.maxMp > 0 ? combatant.mp / combatant.maxMp : 0,
+        position: combatant.position,
+      });
+      return;
+    }
+
     const g = new Graphics();
     const flashAlpha = combatant.flash > 0 ? 0.35 + Math.sin(combatant.flash * 80) * 0.25 : 0;
     const hpRatio = combatant.maxHp > 0 ? combatant.hp / combatant.maxHp : 0;
