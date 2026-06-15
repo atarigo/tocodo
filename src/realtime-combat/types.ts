@@ -28,6 +28,11 @@ export interface ActionBarState {
   itemUsed: boolean[];
 }
 
+export interface CombatStageSnapshot {
+  elapsed: number;
+  enemyAliveCount: number;
+}
+
 /** 六主屬性：範圍 0〜255、起始 10；沒有預設數值，基本狀態全由屬性或裝備提供 */
 export interface Attributes {
   str: number; // 力量：傷害固定值直加

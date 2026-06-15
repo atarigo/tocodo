@@ -2,19 +2,21 @@
   import { onDestroy, onMount } from 'svelte';
   import { Application, Container, Graphics, Text } from 'pixi.js';
   import { RealtimeCombatEngine } from './engine.js';
-  import type { ActionBarState, BattleSetup, CombatEvent, Combatant, InputState, StatusEffect, Strike, Vec2 } from './types.js';
+  import type { ActionBarState, BattleSetup, CombatEvent, Combatant, CombatStageSnapshot, InputState, StatusEffect, Strike, Vec2 } from './types.js';
   import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
   let {
     onEvent,
     onPlayerActionState,
     onPlayerStatuses,
+    onSnapshot,
     setup,
     sessionId,
   }: {
     onEvent?: (event: CombatEvent) => void;
     onPlayerActionState?: (state: ActionBarState) => void;
     onPlayerStatuses?: (statuses: StatusEffect[]) => void;
+    onSnapshot?: (snapshot: CombatStageSnapshot) => void;
     setup: BattleSetup;
     sessionId: number;
   } = $props();
@@ -36,6 +38,7 @@
   let effectsLayer: Container | undefined;
   let projectilesLayer: Container | undefined;
   let rafCleanup: (() => void) | undefined;
+  let elapsed = 0;
 
   function syncMovement(): void {
     input.move.x = 0;
@@ -279,12 +282,18 @@
       localApp.ticker.add((ticker) => {
         syncMovement();
         syncAimFromPointer();
-        localEngine.step(input, ticker.deltaMS / 1000);
+        const dt = ticker.deltaMS / 1000;
+        elapsed += dt;
+        localEngine.step(input, dt);
         onPlayerStatuses?.(localEngine.statusEffects.filter((effect) => effect.targetId === localEngine.player.id));
         onPlayerActionState?.({
           skillCooldowns: localEngine.player.skillSlots.map((skillId) => (skillId ? (localEngine.player.skillCooldowns[skillId] ?? 0) : 0)),
           skillFailureReasons: localEngine.player.skillSlots.map((_, index) => localEngine.playerSkillFailureReason(index)),
           itemUsed: [...localEngine.player.itemUsed],
+        });
+        onSnapshot?.({
+          elapsed,
+          enemyAliveCount: localEngine.enemies.filter((enemy) => enemy.hp > 0).length,
         });
         render();
       });

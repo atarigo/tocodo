@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { attrRank, attrUpgradeCost } from '../game/economy.js';
   import { navigate } from '../web/router.svelte.js';
   import type {
     ActionBarState,
@@ -8,15 +9,29 @@
     BattleSetup,
     CombatEvent,
     CombatHandSide,
+    CombatStageSnapshot,
     DifficultyRank,
     EquipmentLoadout,
     SkillFailureReason,
     StatusEffect,
   } from './types.js';
   import AttributePanel from './AttributePanel.svelte';
+  import RealtimeMapStage, { type MapNearbyState } from './RealtimeMapStage.svelte';
   import RealtimeCombatStage from './RealtimeCombatStage.svelte';
-  import { createRandomBattleSetup, DEFAULT_ACTION_LOADOUT } from './battleSetup.js';
+  import { DEFAULT_ACTION_LOADOUT } from './battleSetup.js';
   import { DEFAULT_LOADOUT } from './equipmentCatalog.js';
+  import {
+    createDungeonStageSetup,
+    emptyRunStats,
+    killRewardFor,
+    NOVICE_DIFFICULTIES,
+    NOVICE_DUNGEON,
+    stageRequiredKills,
+    type DungeonRunStats,
+    type GameScene,
+    type NoviceDifficulty,
+    type NoviceRewardChoice,
+  } from './gameFlow.js';
   import { itemById } from './itemCatalog.js';
   import { skillById } from './skillCatalog.js';
 
@@ -35,18 +50,35 @@
     skillFailureReasons: [null, null, null, null, null],
     itemUsed: [false, false],
   });
+  let scene = $state<GameScene>('landing');
+  let selectedDifficulty = $state<NoviceDifficulty>(1);
+  let currentStageIndex = $state(0);
+  let currentStageKills = $state(0);
+  let currentStageElapsed = $state(0);
   let sessionId = $state(0);
-  let started = $state(false);
   let battleResult = $state<BattleResult | null>(null);
+  let runStats = $state<DungeonRunStats>(emptyRunStats());
+  let rewardPoints = $state(0);
+  let pendingRewardPoints = $state(0);
+  let dungeonSource = $state<'novice' | 'city'>('novice');
+  let stageResolved = $state(false);
+  let isTransitioning = $state(false);
+  let transitionText = $state('');
+  let nearby = $state<MapNearbyState>({
+    novicePortal: false,
+    noviceNpc: false,
+    rewardAltar: false,
+    rewardPlatform: false,
+    cityShop: false,
+    cityPortal: false,
+  });
 
-  function addEvent(event: CombatEvent): void {
-    events.unshift(event);
-    if (events.length > 120) events.length = 120;
-    if (event.kind === 'battleEnd') battleResult = event.result;
-  }
+  const currentStage = $derived(NOVICE_DUNGEON.stages[currentStageIndex] ?? null);
+  const currentStageRequiredKills = $derived(currentStage ? stageRequiredKills(currentStage, selectedDifficulty) : 0);
+  const stageLabel = $derived(currentStage ? `${currentStageIndex + 1} / ${NOVICE_DUNGEON.stages.length}` : '0 / 0');
+  const selectedDifficultyLabel = $derived(NOVICE_DIFFICULTIES.find((item) => item.id === selectedDifficulty)?.label ?? '');
 
-  function startGame(): void {
-    const nextSessionId = sessionId + 1;
+  function resetCombatState(): void {
     events = [];
     playerStatuses = [];
     playerActionState = {
@@ -54,16 +86,148 @@
       skillFailureReasons: [null, null, null, null, null],
       itemUsed: [false, false],
     };
+    currentStageKills = 0;
+    currentStageElapsed = 0;
     battleResult = null;
-    battleSetup = createRandomBattleSetup({
+    stageResolved = false;
+  }
+
+  function setScene(nextScene: GameScene, label: string): void {
+    transitionText = label;
+    isTransitioning = true;
+    window.setTimeout(() => {
+      scene = nextScene;
+      isTransitioning = false;
+    }, 360);
+  }
+
+  function startGame(): void {
+    setScene('novicePlaza', '進入新手廣場');
+  }
+
+  function resetGameToStart(): void {
+    resetCombatState();
+    battleSetup = null;
+    selectedDifficulty = 1;
+    currentStageIndex = 0;
+    runStats = emptyRunStats();
+    pendingRewardPoints = 0;
+    rewardPoints = 0;
+    setScene('landing', '回到起點');
+  }
+
+  function chooseDifficulty(difficulty: NoviceDifficulty): void {
+    selectedDifficulty = difficulty;
+    setScene('noviceReward', '開啟新手獎勵');
+  }
+
+  function chooseNoviceReward(choice: NoviceRewardChoice): void {
+    if (choice === 'weapon') {
+      playerLoadout = { ...playerLoadout, mainHand: 'hunting-bow', offHand: null };
+    } else if (choice === 'armor') {
+      playerLoadout = {
+        ...playerLoadout,
+        head: 'leather-cap',
+        body: 'leather-armor',
+        legs: 'leather-pants',
+        feet: 'leather-boots',
+      };
+    } else {
+      rewardPoints += 500;
+    }
+    startDungeon('novice', selectedDifficulty);
+  }
+
+  function startDungeon(source: 'novice' | 'city', difficulty: NoviceDifficulty): void {
+    dungeonSource = source;
+    selectedDifficulty = difficulty;
+    currentStageIndex = 0;
+    runStats = emptyRunStats();
+    pendingRewardPoints = 0;
+    setScene('dungeon', `進入 ${NOVICE_DUNGEON.name}`);
+    window.setTimeout(() => startStage(0), 380);
+  }
+
+  function startStage(index: number): void {
+    const stage = NOVICE_DUNGEON.stages[index];
+    if (!stage) return;
+    resetCombatState();
+    battleSetup = createDungeonStageSetup({
       playerAttrs,
       loadout: playerLoadout,
       actionLoadout,
-      difficulty: enemyDifficulty,
-      seed: nextSessionId,
+      difficulty: selectedDifficulty,
+      stage,
     });
-    started = true;
-    sessionId = nextSessionId;
+    sessionId += 1;
+  }
+
+  function addEvent(event: CombatEvent): void {
+    events.unshift(event);
+    if (events.length > 120) events.length = 120;
+
+    if (event.kind === 'death' && event.target.side === 'enemy') {
+      currentStageKills += 1;
+      const enemyId = enemyIdForActor(event.target.id);
+      if (enemyId) {
+        runStats.kills[enemyId] = (runStats.kills[enemyId] ?? 0) + 1;
+        const reward = killRewardFor(enemyId, selectedDifficulty);
+        runStats.killRewardPoints += reward;
+        pendingRewardPoints += reward;
+        runStats = { kills: { ...runStats.kills }, killRewardPoints: runStats.killRewardPoints };
+      }
+      if (currentStage?.kind === 'killCount' && currentStageKills >= currentStageRequiredKills) {
+        completeStage();
+      }
+    }
+
+    if (event.kind === 'battleEnd') {
+      if (stageResolved && event.result === 'playerWon') return;
+      battleResult = event.result;
+      if (event.result === 'playerLost') scene = 'dungeon';
+      if (event.result === 'playerWon') completeStage();
+    }
+  }
+
+  function updateStageSnapshot(snapshot: CombatStageSnapshot): void {
+    currentStageElapsed = snapshot.elapsed;
+    if (currentStage?.kind === 'survive' && snapshot.elapsed >= (currentStage.surviveSeconds ?? 0)) {
+      completeStage();
+    }
+  }
+
+  function completeStage(): void {
+    if (scene !== 'dungeon' || stageResolved) return;
+    stageResolved = true;
+    const nextIndex = currentStageIndex + 1;
+    if (nextIndex >= NOVICE_DUNGEON.stages.length) {
+      battleSetup = null;
+      battleResult = null;
+      setScene('rewardPlatform', '前往獎勵平台');
+      return;
+    }
+    currentStageIndex = nextIndex;
+    setScene('dungeon', NOVICE_DUNGEON.stages[nextIndex].title);
+    window.setTimeout(() => startStage(nextIndex), 380);
+  }
+
+  function claimRewardAndEnterCity(): void {
+    rewardPoints += pendingRewardPoints;
+    pendingRewardPoints = 0;
+    setScene('city', '前往城市');
+  }
+
+  function upgradeAttr(key: keyof Attributes): void {
+    const current = playerAttrs[key];
+    const cost = attrUpgradeCost(current);
+    if (rewardPoints < cost || current >= 255) return;
+    rewardPoints -= cost;
+    playerAttrs = { ...playerAttrs, [key]: current + 1 };
+  }
+
+  function enemyIdForActor(actorId: number): string | null {
+    const enemyIndex = actorId - 2;
+    return battleSetup?.enemies[enemyIndex]?.enemyId ?? null;
   }
 
   function outcomeNote(outcome: string): string {
@@ -135,31 +299,155 @@
   <aside class="realtime-left">
     <AttributePanel bind:playerAttrs bind:enemyDifficulty bind:playerLoadout bind:actionLoadout {battleSetup} />
   </aside>
+
   <section class="realtime-center">
-    {#if started && battleSetup}
+    {#if isTransitioning}
+      <div class="transition-screen">
+        <div>{transitionText}</div>
+      </div>
+    {/if}
+
+    {#if scene === 'landing'}
+      <div class="landing-scene">
+        <div class="landing-copy">
+          <p class="scene-kicker">即時戰鬥</p>
+          <h2>世界</h2>
+          <p>從新手廣場開始，通過傳送門進入第一個 D 級試煉。</p>
+          <button class="primary" onclick={startGame}>開始遊戲</button>
+        </div>
+      </div>
+    {:else if scene === 'novicePlaza'}
+      <RealtimeMapStage {scene} onNearbyChange={(state) => (nearby = state)} />
+    {:else if scene === 'noviceReward'}
+      <RealtimeMapStage {scene} onNearbyChange={(state) => (nearby = state)} />
+    {:else if scene === 'dungeon' && battleSetup && currentStage}
       {#key sessionId}
         <RealtimeCombatStage
           onEvent={addEvent}
           onPlayerActionState={(state) => (playerActionState = state)}
           onPlayerStatuses={(statuses) => (playerStatuses = statuses)}
+          onSnapshot={updateStageSnapshot}
           setup={battleSetup}
           {sessionId}
         />
       {/key}
-      {#if battleResult}
+      {#if battleResult === 'playerLost'}
         <div class="result-panel">
-          <div class="result-title">{battleResult === 'playerWon' ? '勝利' : '失敗'}</div>
-          <button class="primary" onclick={startGame}>重新開始</button>
+          <div class="result-title">死亡</div>
+          <p>本輪流程結束，回到開始遊戲。</p>
+          <button class="primary" onclick={resetGameToStart}>回到開始</button>
         </div>
       {/if}
-    {:else}
-      <div class="start-panel">
-        <button class="primary" onclick={startGame}>開始遊戲</button>
+    {:else if scene === 'dungeon'}
+      <div class="transition-screen inline">
+        <div>準備戰鬥</div>
+      </div>
+    {:else if scene === 'rewardPlatform'}
+      <RealtimeMapStage {scene} onNearbyChange={(state) => (nearby = state)} />
+    {:else if scene === 'city'}
+      <RealtimeMapStage {scene} onNearbyChange={(state) => (nearby = state)} />
+    {/if}
+
+    {#if scene === 'novicePlaza' || scene === 'noviceReward' || scene === 'rewardPlatform' || scene === 'city'}
+      <div class="arena-overlay">
+        <div class="arena-frame">
+          {#if scene === 'novicePlaza' && nearby.noviceNpc}
+            <div class="field-panel npc-dialog">
+              <h3>說明 NPC</h3>
+              <p>...</p>
+            </div>
+          {/if}
+          {#if scene === 'novicePlaza' && nearby.novicePortal}
+            <div class="field-panel portal-choice-panel">
+              <h3>新手副本限定</h3>
+              <p>選擇進入難度。</p>
+              <div class="choice-list">
+                {#each NOVICE_DIFFICULTIES as difficulty}
+                  <button onclick={() => chooseDifficulty(difficulty.id)}>{difficulty.label}</button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+          {#if scene === 'noviceReward' && nearby.rewardAltar}
+            <div class="field-panel reward-choice-panel">
+              <h3>新手獎勵三選一</h3>
+              <p>你選擇的 {selectedDifficultyLabel}，獲得新手獎勵三選一：</p>
+              <div class="choice-grid">
+                <button onclick={() => chooseNoviceReward('weapon')}>
+                  <strong>D 級武器</strong>
+                  <span>取得獵弓，進入副本。</span>
+                </button>
+                <button onclick={() => chooseNoviceReward('armor')}>
+                  <strong>D 級防具</strong>
+                  <span>取得皮帽、皮甲、皮褲、皮靴。</span>
+                </button>
+                <button onclick={() => chooseNoviceReward('points')}>
+                  <strong>獎勵點 500</strong>
+                  <span>立即取得 500 點。</span>
+                </button>
+              </div>
+            </div>
+          {/if}
+          {#if scene === 'rewardPlatform' && nearby.rewardPlatform}
+            <div class="field-panel reward-choice-panel">
+              <h3>副本結算</h3>
+              <div class="summary-list big">
+                <div><span>殺敵數</span><strong>{Object.values(runStats.kills).reduce((sum, count) => sum + count, 0)}</strong></div>
+                <div><span>殺敵獎勵點總和</span><strong>{pendingRewardPoints}</strong></div>
+              </div>
+              <div class="kill-list">
+                {#each Object.entries(runStats.kills) as [enemyId, count]}
+                  <div><span>{enemyId}</span><strong>{count}</strong></div>
+                {/each}
+              </div>
+              <button class="primary" onclick={claimRewardAndEnterCity}>領取獎勵並前往城市</button>
+            </div>
+          {/if}
+          {#if scene === 'city' && nearby.cityPortal}
+            <div class="field-panel portal-choice-panel">
+              <h3>傳送門</h3>
+              <p>進入 {NOVICE_DUNGEON.name}，固定 100% 難度。</p>
+              <button class="primary" onclick={() => startDungeon('city', 1)}>進入副本</button>
+            </div>
+          {/if}
+          {#if scene === 'city' && nearby.cityShop}
+            <section class="field-panel shop-panel">
+              <h3>屬性商店</h3>
+              <div class="points">獎勵點：<strong>{rewardPoints}</strong></div>
+              {#each Object.entries(playerAttrs) as [key, value]}
+                <div class="upgrade-row">
+                  <span>{key.toUpperCase()} {value} / {attrRank(value)}</span>
+                  <button disabled={rewardPoints < attrUpgradeCost(value) || value >= 255} onclick={() => upgradeAttr(key as keyof Attributes)}>
+                    升級 {attrUpgradeCost(value)}
+                  </button>
+                </div>
+              {/each}
+            </section>
+          {/if}
+        </div>
       </div>
     {/if}
-    {#if started}
+
+    {#if scene !== 'landing'}
       <div class="stage-actions">
         <div class="status-badges">
+          {#if scene === 'dungeon' && currentStage}
+            <div class="stage-chip">
+              <span>{stageLabel}</span>
+              <strong>{currentStage.title}</strong>
+            </div>
+            {#if currentStage.kind === 'survive'}
+              <div class="stage-chip">
+                <span>存活</span>
+                <strong>{Math.min(currentStageElapsed, currentStage.surviveSeconds ?? 0).toFixed(1)} / {currentStage.surviveSeconds}s</strong>
+              </div>
+            {:else}
+              <div class="stage-chip">
+                <span>擊殺</span>
+                <strong>{currentStageKills} / {currentStageRequiredKills}</strong>
+              </div>
+            {/if}
+          {/if}
           {#each playerStatuses as status (status.id)}
             <div class="status-badge" class:buff-badge={status.kind === 'buff'}>
               <span>{status.name}</span>
@@ -167,8 +455,9 @@
             </div>
           {/each}
         </div>
-        <button onclick={startGame}>重新開始</button>
+        <button onclick={resetGameToStart}>重新開始</button>
       </div>
+
       <div class="quickbar">
         <div class="quickbar-row skills">
           {#each Array(5) as _, index}
@@ -200,6 +489,7 @@
       </div>
     {/if}
   </section>
+
   <aside class="realtime-log">
     <h2>戰鬥日誌</h2>
     <div class="log-list">
@@ -247,12 +537,189 @@
     padding: 12px;
   }
 
-  .start-panel {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .transition-screen {
+    position: absolute;
+    inset: 12px;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+    color: #f4f6fb;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0;
+    background: rgba(8, 10, 14, 0.82);
+    animation: scene-fade 0.38s ease both;
+  }
+
+  .transition-screen.inline {
+    z-index: 1;
+    background: rgba(14, 16, 22, 0.94);
+  }
+
+  .landing-scene {
+    position: relative;
+    width: 100%;
     height: 100%;
     min-height: 520px;
+    color: var(--text);
+    overflow: hidden;
+    border-radius: 6px;
+    background: #11131a;
+    touch-action: none;
+    animation: scene-enter 0.24s ease both;
+    display: grid;
+    align-items: center;
+    padding: 42px;
+    background:
+      linear-gradient(90deg, rgba(14, 17, 22, 0.86), rgba(14, 17, 22, 0.34)),
+      linear-gradient(140deg, rgba(42, 49, 59, 0.58), rgba(17, 19, 25, 0.94));
+  }
+
+  .landing-copy {
+    display: grid;
+    gap: 14px;
+    max-width: 460px;
+  }
+
+  .landing-copy h2 {
+    margin: 0;
+    font-size: 42px;
+  }
+
+  .landing-copy p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .landing-copy .primary {
+    width: fit-content;
+  }
+
+  .arena-overlay {
+    position: absolute;
+    inset: 12px;
+    z-index: 3;
+    pointer-events: none;
+    container-type: size;
+  }
+
+  .arena-frame {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(100cqw, 133.333cqh);
+    height: min(75cqw, 100cqh);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .field-panel {
+    position: absolute;
+    display: grid;
+    gap: 10px;
+    max-width: calc(100% - 56px);
+    max-height: calc(100% - 170px);
+    overflow: auto;
+    pointer-events: auto;
+    padding: 16px;
+    border-radius: 8px;
+    background: rgba(15, 18, 25, 0.9);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+  }
+
+  .portal-choice-panel {
+    right: 28px;
+    top: 64px;
+    width: min(320px, calc(100% - 60px));
+    border: 1px solid rgba(117, 154, 240, 0.42);
+  }
+
+  .npc-dialog {
+    left: 28px;
+    bottom: 126px;
+    width: min(280px, calc(100% - 56px));
+    border: 1px solid rgba(220, 198, 132, 0.42);
+  }
+
+  .reward-choice-panel {
+    left: 50%;
+    bottom: 126px;
+    width: min(620px, calc(100% - 56px));
+    border: 1px solid rgba(220, 198, 132, 0.42);
+    transform: translateX(-50%);
+  }
+
+  .field-panel.shop-panel {
+    left: 28px;
+    top: 64px;
+    width: min(360px, calc(100% - 56px));
+    border-color: rgba(112, 202, 139, 0.42);
+  }
+
+  .field-panel h3,
+  .field-panel p {
+    margin: 0;
+  }
+
+  .field-panel p {
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  @keyframes scene-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes scene-enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .scene-kicker {
+    margin: 0 0 8px;
+    color: var(--accent-2);
+    font-size: 13px;
+  }
+
+  .shop-panel {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: rgba(16, 18, 24, 0.72);
+  }
+
+  .choice-list,
+  .choice-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .choice-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .choice-grid button {
+    display: grid;
+    gap: 8px;
+    min-height: 120px;
+    text-align: left;
+  }
+
+  .choice-grid span,
+  .points {
+    color: var(--muted);
   }
 
   .stage-actions {
@@ -282,7 +749,8 @@
     pointer-events: none;
   }
 
-  .status-badge {
+  .status-badge,
+  .stage-chip {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -298,13 +766,20 @@
     backdrop-filter: blur(4px);
   }
 
+  .stage-chip {
+    border-color: rgba(91, 141, 239, 0.55);
+    background: rgba(15, 25, 45, 0.9);
+    color: #dce7ff;
+  }
+
   .status-badge.buff-badge {
     border-color: rgba(94, 211, 132, 0.82);
     background: rgba(20, 58, 35, 0.9);
     color: #d7ffe0;
   }
 
-  .status-badge strong {
+  .status-badge strong,
+  .stage-chip strong {
     margin-left: auto;
     font-weight: 600;
   }
@@ -410,12 +885,37 @@
     background: rgba(17, 19, 26, 0.72);
     backdrop-filter: blur(3px);
     border-radius: 6px;
+    color: var(--text);
   }
 
   .result-title {
     color: var(--text);
     font-size: 32px;
     font-weight: 700;
+  }
+
+  .summary-list,
+  .kill-list {
+    display: grid;
+    gap: 8px;
+    max-width: 420px;
+  }
+
+  .summary-list.big {
+    font-size: 18px;
+  }
+
+  .summary-list div,
+  .kill-list div,
+  .upgrade-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .upgrade-row {
+    padding: 6px 0;
   }
 
   .realtime-log {
@@ -442,16 +942,13 @@
     line-height: 1.45;
   }
 
-  .player-line {
+  .player-line,
+  .ally-line {
     color: var(--good);
   }
 
   .enemy-line {
     color: var(--accent);
-  }
-
-  .ally-line {
-    color: var(--good);
   }
 
   .neutral-line {
