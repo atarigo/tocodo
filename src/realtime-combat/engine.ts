@@ -33,6 +33,11 @@ const PLAYER_IDLE_MP_REGEN_INTERVAL = 30;
 const PLAYER_IDLE_MP_REGEN_RATIO = 0.002;
 const TERRAIN_COLLISION_CATEGORY = 0x0001;
 const COMBATANT_COLLISION_CATEGORY = 0x0002;
+const RANGED_STRAFE_DURATION = 1.25;
+const RANGED_STUCK_SWAP_TIME = 0.55;
+const RANGED_STUCK_DISTANCE = 4;
+const TARGET_LOCK_DURATION = 1;
+const HEAL_THREAT_MULTIPLIER = 0.5;
 
 function length(v: Vec2): number {
   return Math.hypot(v.x, v.y);
@@ -218,6 +223,9 @@ export class RealtimeCombatEngine {
   private playerIdleHpRegenTimer = 0;
   private playerIdleMpRegenTimer = 0;
   private readonly npcResetRegenTimers = new Map<number, number>();
+  private readonly rangedStrafeStates = new Map<number, { direction: -1 | 1; timer: number; stuckTimer: number; lastPosition: Vec2 }>();
+  private readonly threat = new Map<number, Map<number, number>>();
+  private readonly targetLocks = new Map<number, { targetId: number; timer: number }>();
 
   constructor(opts: { seed?: number; onEvent?: (event: CombatEvent) => void; setup?: BattleSetup; enemyAttrsOverride?: Attributes } = {}) {
     this.rng = createRng(opts.seed ?? Date.now());
@@ -307,7 +315,7 @@ export class RealtimeCombatEngine {
     this.tickTimers(safeDt);
     if (!this.result) {
       this.updatePlayer(input);
-      this.updateNpcCombatants();
+      this.updateNpcCombatants(safeDt);
       this.removeDeadBodies();
     } else {
       this.stopBodies();
@@ -370,6 +378,10 @@ export class RealtimeCombatEngine {
       }
       combatant.flash = Math.max(0, combatant.flash - dt);
     }
+    for (const [actorId, lock] of this.targetLocks) {
+      lock.timer -= dt;
+      if (lock.timer <= 0) this.targetLocks.delete(actorId);
+    }
   }
 
   private updatePlayer(input: InputState): void {
@@ -382,7 +394,7 @@ export class RealtimeCombatEngine {
     }
   }
 
-  private updateNpcCombatants(): void {
+  private updateNpcCombatants(dt: number): void {
     for (const actor of this.npcCombatants()) {
       if (actor.hp <= 0 || this.player.hp <= 0) {
         this.setVelocity(actor, { x: 0, y: 0 });
@@ -399,7 +411,7 @@ export class RealtimeCombatEngine {
         continue;
       }
 
-      this.updateCombatState(actor);
+      this.updateCombatState(actor, dt);
     }
   }
 
@@ -423,6 +435,7 @@ export class RealtimeCombatEngine {
       this.moveBodyTo(actor, actor.homePosition);
       actor.aiState = actor.defaultAiState === 'patrol' ? 'patrol' : 'guard';
       actor.combatOrigin = undefined;
+      this.clearThreatFor(actor);
       this.startNpcResetRegen(actor);
       this.setVelocity(actor, { x: 0, y: 0 });
       return;
@@ -432,7 +445,7 @@ export class RealtimeCombatEngine {
     this.setVelocity(actor, { x: dir.x * actor.speed, y: dir.y * actor.speed });
   }
 
-  private updateCombatState(actor: Combatant): void {
+  private updateCombatState(actor: Combatant, dt: number): void {
     if (distance(actor.position, actor.combatOrigin ?? actor.homePosition) > actor.leashRange) {
       actor.aiState = 'returning';
       this.clearNpcResetRegen(actor);
@@ -461,7 +474,7 @@ export class RealtimeCombatEngine {
       const moveSign = d < preferred ? -1 : 1;
       const shouldMove = Math.abs(d - preferred) > 26;
       const hasShot = this.hasLineOfSight(actor.position, target.position);
-      const desired = shouldMove ? { x: dir.x * moveSign, y: dir.y * moveSign } : hasShot ? { x: 0, y: 0 } : this.sideStepDirection(actor, target);
+      const desired = shouldMove ? { x: dir.x * moveSign, y: dir.y * moveSign } : hasShot ? { x: 0, y: 0 } : this.sideStepDirection(actor, target, dt);
       const movement = this.steeredDirection(actor, target, desired);
       this.setVelocity(actor, { x: movement.x * actor.speed, y: movement.y * actor.speed });
       if (hasShot && d <= this.maxAttackRange(actor) && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
@@ -518,16 +531,45 @@ export class RealtimeCombatEngine {
     return best;
   }
 
-  private sideStepDirection(actor: Combatant, target: Combatant): Vec2 {
+  private sideStepDirection(actor: Combatant, target: Combatant, dt: number): Vec2 {
+    const state = this.rangedStrafeState(actor, dt);
     const toTarget = normalize({
       x: target.position.x - actor.position.x,
       y: target.position.y - actor.position.y,
     });
-    const left = { x: -toTarget.y, y: toTarget.x };
-    const right = { x: toTarget.y, y: -toTarget.x };
-    if (this.movementBlocked(actor, left)) return right;
-    if (this.movementBlocked(actor, right)) return left;
-    return this.rng() < 0.5 ? left : right;
+    const preferred = state.direction === -1 ? { x: -toTarget.y, y: toTarget.x } : { x: toTarget.y, y: -toTarget.x };
+    const fallback = state.direction === -1 ? { x: toTarget.y, y: -toTarget.x } : { x: -toTarget.y, y: toTarget.x };
+    if (this.movementBlocked(actor, preferred) && !this.movementBlocked(actor, fallback)) {
+      state.direction = state.direction === -1 ? 1 : -1;
+      state.timer = RANGED_STRAFE_DURATION;
+      return fallback;
+    }
+    return preferred;
+  }
+
+  private rangedStrafeState(actor: Combatant, dt: number): { direction: -1 | 1; timer: number; stuckTimer: number; lastPosition: Vec2 } {
+    let state = this.rangedStrafeStates.get(actor.id);
+    if (!state) {
+      state = {
+        direction: this.rng() < 0.5 ? -1 : 1,
+        timer: RANGED_STRAFE_DURATION,
+        stuckTimer: 0,
+        lastPosition: { ...actor.position },
+      };
+      this.rangedStrafeStates.set(actor.id, state);
+      return state;
+    }
+
+    state.timer -= dt;
+    const moved = distance(actor.position, state.lastPosition);
+    state.stuckTimer = moved < RANGED_STUCK_DISTANCE ? state.stuckTimer + dt : 0;
+    if (state.timer <= 0 || state.stuckTimer >= RANGED_STUCK_SWAP_TIME) {
+      state.direction = state.direction === -1 ? 1 : -1;
+      state.timer = RANGED_STRAFE_DURATION;
+      state.stuckTimer = 0;
+    }
+    state.lastPosition = { ...actor.position };
+    return state;
   }
 
   private movementBlocked(actor: Combatant, direction: Vec2): boolean {
@@ -583,6 +625,7 @@ export class RealtimeCombatEngine {
       this.bodies.delete(combatant.id);
       combatant.bodyId = null;
       this.clearNpcResetRegen(combatant);
+      this.clearThreatFor(combatant);
     }
   }
 
@@ -642,15 +685,17 @@ export class RealtimeCombatEngine {
       const angle = attacker.facing + spreadOffset;
       const shotDir = { x: Math.cos(angle), y: Math.sin(angle) };
       const sideDir = { x: -Math.sin(attacker.facing), y: Math.cos(attacker.facing) };
+      const position = {
+        x: attacker.position.x + shotDir.x * (attacker.radius + 8) + sideDir.x * laneOffset,
+        y: attacker.position.y + shotDir.y * (attacker.radius + 8) + sideDir.y * laneOffset,
+      };
+      if (this.projectileSpawnBlocked(position, ammo.radius)) continue;
       this.projectiles.push({
         id: this.nextProjectileId++,
         ownerId: attacker.id,
         weaponId: weapon.id,
         hand: hand.side,
-        position: {
-          x: attacker.position.x + shotDir.x * (attacker.radius + 8) + sideDir.x * laneOffset,
-          y: attacker.position.y + shotDir.y * (attacker.radius + 8) + sideDir.y * laneOffset,
-        },
+        position,
         velocity: { x: shotDir.x * ammo.speed, y: shotDir.y * ammo.speed },
         radius: ammo.radius,
         ttl: range / ammo.speed,
@@ -844,6 +889,7 @@ export class RealtimeCombatEngine {
       const heal = Math.max(1, Math.round(target.maxHp * effect.ratio));
       const applied = Math.max(0, Math.min(heal, target.maxHp - target.hp));
       target.hp = Math.min(target.maxHp, target.hp + heal);
+      if (applied > 0) this.addHealingThreat(target, target, applied);
       this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
       this.pushResourceEvent(target, target, 'hp', applied, item.name);
     }
@@ -865,6 +911,7 @@ export class RealtimeCombatEngine {
         if (effect.effectType === 'damage') {
           if (source.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
           target.hp = Math.max(0, target.hp - effect.amountPerTick);
+          this.addThreat(target, source, effect.amountPerTick);
           if (target.hp > 0 && target.faction !== 'player' && this.canAttack(target, source)) {
             this.enterCombat(target);
           }
@@ -874,6 +921,7 @@ export class RealtimeCombatEngine {
         } else {
           const applied = Math.max(0, Math.min(effect.amountPerTick, target.maxHp - target.hp));
           target.hp = Math.min(target.maxHp, target.hp + effect.amountPerTick);
+          if (applied > 0) this.addHealingThreat(source, target, applied);
           this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
           this.pushResourceEvent(source, target, 'hp', applied, effect.name);
         }
@@ -945,6 +993,32 @@ export class RealtimeCombatEngine {
     if (mpAmount > 0) target.mp = Math.min(target.maxMp, target.mp + mpAmount);
   }
 
+  private addThreat(observer: Combatant, source: Combatant, amount: number): void {
+    if (amount <= 0 || observer.hp <= 0 || source.hp <= 0) return;
+    if (!this.canAttack(observer, source)) return;
+    let table = this.threat.get(observer.id);
+    if (!table) {
+      table = new Map<number, number>();
+      this.threat.set(observer.id, table);
+    }
+    table.set(source.id, (table.get(source.id) ?? 0) + amount);
+  }
+
+  private addHealingThreat(healer: Combatant, healed: Combatant, amount: number): void {
+    const threatAmount = amount * HEAL_THREAT_MULTIPLIER;
+    if (threatAmount <= 0) return;
+    for (const observer of this.combatants()) {
+      if (observer.hp <= 0 || !this.canAttack(observer, healer)) continue;
+      const table = this.threat.get(observer.id);
+      if (!table?.has(healed.id)) continue;
+      this.addThreat(observer, healer, threatAmount);
+    }
+  }
+
+  private threatFor(observer: Combatant, target: Combatant): number {
+    return this.threat.get(observer.id)?.get(target.id) ?? 0;
+  }
+
   private tickPlayerCombatState(dt: number): void {
     if (this.player.aiState !== 'combat') return;
     this.playerCombatTimer = Math.max(0, this.playerCombatTimer - dt);
@@ -966,6 +1040,17 @@ export class RealtimeCombatEngine {
 
   private clearNpcResetRegen(actor: Combatant): void {
     this.npcResetRegenTimers.delete(actor.id);
+  }
+
+  private clearThreatFor(combatant: Combatant): void {
+    this.threat.delete(combatant.id);
+    this.targetLocks.delete(combatant.id);
+    for (const table of this.threat.values()) {
+      table.delete(combatant.id);
+    }
+    for (const [actorId, lock] of this.targetLocks) {
+      if (lock.targetId === combatant.id) this.targetLocks.delete(actorId);
+    }
   }
 
   private resolveBasicAttackWithWeapon(attacker: Combatant, target: Combatant, weapon?: WeaponDefinition, hand?: CombatHandSide): number {
@@ -991,6 +1076,7 @@ export class RealtimeCombatEngine {
 
     if (damage > 0) {
       target.hp = Math.max(0, target.hp - damage);
+      this.addThreat(target, attacker, damage);
       if (target.hp > 0 && target.faction !== 'player') {
         if (target.faction === 'neutral') target.retaliationTargetId = attacker.id;
         if (this.canAttack(target, attacker)) this.enterCombat(target);
@@ -1030,12 +1116,20 @@ export class RealtimeCombatEngine {
   }
 
   private projectileHitsObstacle(projectile: Projectile): boolean {
+    return this.pointHitsObstacle(projectile.position, projectile.radius);
+  }
+
+  private projectileSpawnBlocked(position: Vec2, radius: number): boolean {
+    return this.pointHitsObstacle(position, radius);
+  }
+
+  private pointHitsObstacle(position: Vec2, radius: number): boolean {
     return this.obstacles.some((obstacle) => {
       const halfWidth = obstacle.width / 2;
       const halfHeight = obstacle.height / 2;
-      const closestX = Math.max(obstacle.position.x - halfWidth, Math.min(projectile.position.x, obstacle.position.x + halfWidth));
-      const closestY = Math.max(obstacle.position.y - halfHeight, Math.min(projectile.position.y, obstacle.position.y + halfHeight));
-      return distance(projectile.position, { x: closestX, y: closestY }) <= projectile.radius;
+      const closestX = Math.max(obstacle.position.x - halfWidth, Math.min(position.x, obstacle.position.x + halfWidth));
+      const closestY = Math.max(obstacle.position.y - halfHeight, Math.min(position.y, obstacle.position.y + halfHeight));
+      return distance(position, { x: closestX, y: closestY }) <= radius;
     });
   }
 
@@ -1072,19 +1166,47 @@ export class RealtimeCombatEngine {
     const targets = this.attackableTargetsFor(attacker);
     if (attacker.faction === 'neutral') {
       const target = targets.find((candidate) => candidate.id === attacker.retaliationTargetId) ?? null;
-      if (!target) attacker.retaliationTargetId = undefined;
+      if (!target) {
+        attacker.retaliationTargetId = undefined;
+        this.clearThreatFor(attacker);
+      }
       return target;
     }
+    const locked = this.lockedTargetFor(attacker, targets);
+    if (locked) return locked;
+
     let nearest: Combatant | null = null;
     let nearestDistance = Infinity;
+    let bestThreatTarget: Combatant | null = null;
+    let bestThreat = 0;
+    let bestThreatDistance = Infinity;
     for (const target of targets) {
       const d = distance(attacker.position, target.position);
+      const threat = this.threatFor(attacker, target);
+      if (threat > bestThreat || (threat > 0 && threat === bestThreat && d < bestThreatDistance)) {
+        bestThreatTarget = target;
+        bestThreat = threat;
+        bestThreatDistance = d;
+      }
       if (d < nearestDistance) {
         nearest = target;
         nearestDistance = d;
       }
     }
-    return nearest;
+    const selected = bestThreatTarget ?? nearest;
+    if (selected) this.targetLocks.set(attacker.id, { targetId: selected.id, timer: TARGET_LOCK_DURATION });
+    return selected;
+  }
+
+  private lockedTargetFor(attacker: Combatant, targets: Combatant[]): Combatant | null {
+    const lock = this.targetLocks.get(attacker.id);
+    if (!lock) return null;
+    const target = targets.find((candidate) => candidate.id === lock.targetId) ?? null;
+    if (!target) {
+      this.targetLocks.delete(attacker.id);
+      return null;
+    }
+    return target;
   }
 
   private alertTargetFor(attacker: Combatant): Combatant | null {
