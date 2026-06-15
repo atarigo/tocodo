@@ -31,7 +31,7 @@ export interface ActionBarState {
 /** 六主屬性：範圍 0〜255、起始 10；沒有預設數值，基本狀態全由屬性或裝備提供 */
 export interface Attributes {
   str: number; // 力量：傷害固定值直加
-  vit: number; // 體質：生命 ×10、毒系附加成功率折減
+  vit: number; // 體質：生命 ×10
   agi: number; // 敏捷：攻速（依武器宣告）、閃避
   dex: number; // 靈巧：命中（壓制閃避）、平衡放大
   wil: number; // 意志：精神 ×5、debuff 縮時
@@ -67,6 +67,7 @@ export interface Combatant {
   color: number;
   position: Vec2;
   homePosition: Vec2;
+  combatOrigin?: Vec2;
   facing: number;
   speed: number;
   hp: number;

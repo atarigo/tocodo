@@ -31,6 +31,8 @@ const PLAYER_IDLE_HP_REGEN_INTERVAL = 1;
 const PLAYER_IDLE_HP_REGEN_RATIO = 0.01;
 const PLAYER_IDLE_MP_REGEN_INTERVAL = 30;
 const PLAYER_IDLE_MP_REGEN_RATIO = 0.002;
+const TERRAIN_COLLISION_CATEGORY = 0x0001;
+const COMBATANT_COLLISION_CATEGORY = 0x0002;
 
 function length(v: Vec2): number {
   return Math.hypot(v.x, v.y);
@@ -306,6 +308,7 @@ export class RealtimeCombatEngine {
     if (!this.result) {
       this.updatePlayer(input);
       this.updateNpcCombatants();
+      this.removeDeadBodies();
     } else {
       this.stopBodies();
     }
@@ -314,6 +317,7 @@ export class RealtimeCombatEngine {
     if (!this.result) this.tickProjectiles(safeDt);
     else this.projectiles.length = 0;
     if (!this.result) this.tickStatusEffects(safeDt);
+    if (!this.result) this.removeDeadBodies();
     if (!this.result) this.tickPlayerCombatState(safeDt);
     if (!this.result) this.tickHiddenPassiveRegen(safeDt);
     this.tickEffects(safeDt);
@@ -345,6 +349,10 @@ export class RealtimeCombatEngine {
     const body = Matter.Bodies.circle(combatant.position.x, combatant.position.y, combatant.radius, {
       frictionAir: 0.2,
       restitution: 0.08,
+      collisionFilter: {
+        category: COMBATANT_COLLISION_CATEGORY,
+        mask: TERRAIN_COLLISION_CATEGORY,
+      },
     });
     Matter.Body.setMass(body, combatant.faction === 'player' ? 1 : 8);
     Matter.Composite.add(this.matter.world, body);
@@ -370,7 +378,6 @@ export class RealtimeCombatEngine {
 
     if (input.aim.x !== 0 || input.aim.y !== 0) this.player.facing = Math.atan2(input.aim.y, input.aim.x);
     if (input.attacking && this.player.hp > 0) {
-      this.markPlayerInCombat();
       this.performReadyAttacks(this.player, this.attackableTargetsFor(this.player));
     }
   }
@@ -400,8 +407,7 @@ export class RealtimeCombatEngine {
     this.setVelocity(actor, { x: 0, y: 0 });
     const target = this.alertTargetFor(actor);
     if (target) {
-      actor.aiState = 'combat';
-      this.clearNpcResetRegen(actor);
+      this.enterCombat(actor);
       actor.facing = angleTo(actor.position, target.position);
     }
   }
@@ -416,17 +422,18 @@ export class RealtimeCombatEngine {
     if (d <= RETURN_DISTANCE) {
       this.moveBodyTo(actor, actor.homePosition);
       actor.aiState = actor.defaultAiState === 'patrol' ? 'patrol' : 'guard';
+      actor.combatOrigin = undefined;
       this.startNpcResetRegen(actor);
       this.setVelocity(actor, { x: 0, y: 0 });
       return;
     }
-    const dir = normalize(toHome);
+    const dir = this.steeredDirectionToPoint(actor, actor.homePosition, normalize(toHome));
     actor.facing = Math.atan2(dir.y, dir.x);
     this.setVelocity(actor, { x: dir.x * actor.speed, y: dir.y * actor.speed });
   }
 
   private updateCombatState(actor: Combatant): void {
-    if (distance(actor.position, actor.homePosition) > actor.leashRange) {
+    if (distance(actor.position, actor.combatOrigin ?? actor.homePosition) > actor.leashRange) {
       actor.aiState = 'returning';
       this.clearNpcResetRegen(actor);
       return;
@@ -453,11 +460,16 @@ export class RealtimeCombatEngine {
       const preferred = definition.preferredRange ?? 170;
       const moveSign = d < preferred ? -1 : 1;
       const shouldMove = Math.abs(d - preferred) > 26;
-      this.setVelocity(actor, shouldMove ? { x: dir.x * actor.speed * moveSign, y: dir.y * actor.speed * moveSign } : { x: 0, y: 0 });
-      if (d <= this.maxAttackRange(actor) && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
+      const hasShot = this.hasLineOfSight(actor.position, target.position);
+      const desired = shouldMove ? { x: dir.x * moveSign, y: dir.y * moveSign } : hasShot ? { x: 0, y: 0 } : this.sideStepDirection(actor, target);
+      const movement = this.steeredDirection(actor, target, desired);
+      this.setVelocity(actor, { x: movement.x * actor.speed, y: movement.y * actor.speed });
+      if (hasShot && d <= this.maxAttackRange(actor) && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
     } else {
       const holdDistance = this.maxAttackRange(actor) + target.radius - 8;
-      this.setVelocity(actor, d > holdDistance ? { x: dir.x * actor.speed, y: dir.y * actor.speed } : { x: 0, y: 0 });
+      const desired = d > holdDistance ? dir : { x: 0, y: 0 };
+      const movement = this.steeredDirection(actor, target, desired);
+      this.setVelocity(actor, { x: movement.x * actor.speed, y: movement.y * actor.speed });
       if (d <= this.maxAttackRange(actor) + target.radius && this.hasReadyHand(actor)) this.performReadyAttacks(actor, this.attackableTargetsFor(actor));
     }
 
@@ -467,6 +479,65 @@ export class RealtimeCombatEngine {
         y: (actor.position.y + target.position.y) / 2,
       });
     }
+  }
+
+  private enterCombat(actor: Combatant): void {
+    if (actor.faction === 'player') return;
+    if (actor.aiState !== 'combat') actor.combatOrigin = { ...actor.position };
+    actor.aiState = 'combat';
+    this.clearNpcResetRegen(actor);
+  }
+
+  private steeredDirection(actor: Combatant, target: Combatant, desired: Vec2): Vec2 {
+    return this.steeredDirectionToPoint(actor, target.position, desired, this.hasLineOfSight(actor.position, target.position));
+  }
+
+  private steeredDirectionToPoint(actor: Combatant, targetPosition: Vec2, desired: Vec2, hasLineOfSight = this.hasLineOfSight(actor.position, targetPosition)): Vec2 {
+    const base = normalize(desired);
+    if (base.x === 0 && base.y === 0) return base;
+    if (!this.movementBlocked(actor, base) && hasLineOfSight) return base;
+
+    const left = normalize({ x: -base.y + base.x * 0.35, y: base.x + base.y * 0.35 });
+    const right = normalize({ x: base.y + base.x * 0.35, y: -base.x + base.y * 0.35 });
+    const candidates = [left, right, base].filter((candidate) => !this.movementBlocked(actor, candidate));
+    if (candidates.length === 0) return base;
+
+    let best = candidates[0];
+    let bestDistance = Infinity;
+    for (const candidate of candidates) {
+      const projected = {
+        x: actor.position.x + candidate.x * actor.speed * 0.45,
+        y: actor.position.y + candidate.y * actor.speed * 0.45,
+      };
+      const d = distance(projected, targetPosition);
+      if (d < bestDistance) {
+        best = candidate;
+        bestDistance = d;
+      }
+    }
+    return best;
+  }
+
+  private sideStepDirection(actor: Combatant, target: Combatant): Vec2 {
+    const toTarget = normalize({
+      x: target.position.x - actor.position.x,
+      y: target.position.y - actor.position.y,
+    });
+    const left = { x: -toTarget.y, y: toTarget.x };
+    const right = { x: toTarget.y, y: -toTarget.x };
+    if (this.movementBlocked(actor, left)) return right;
+    if (this.movementBlocked(actor, right)) return left;
+    return this.rng() < 0.5 ? left : right;
+  }
+
+  private movementBlocked(actor: Combatant, direction: Vec2): boolean {
+    const lookAhead = actor.radius + Math.max(36, actor.speed * 0.35);
+    const from = actor.position;
+    const to = {
+      x: actor.position.x + direction.x * lookAhead,
+      y: actor.position.y + direction.y * lookAhead,
+    };
+    return this.obstacles.some((obstacle) => segmentIntersectsRect(from, to, obstacle));
   }
 
   private setVelocity(combatant: Combatant, velocity: Vec2): void {
@@ -500,6 +571,18 @@ export class RealtimeCombatEngine {
       const body = this.bodies.get(combatant.id);
       if (!body) continue;
       combatant.position = { x: body.position.x, y: body.position.y };
+    }
+  }
+
+  private removeDeadBodies(): void {
+    for (const combatant of this.combatants()) {
+      if (combatant.hp > 0 || combatant.bodyId === null) continue;
+      const body = this.bodies.get(combatant.id);
+      if (!body) continue;
+      Matter.Composite.remove(this.matter.world, body);
+      this.bodies.delete(combatant.id);
+      combatant.bodyId = null;
+      this.clearNpcResetRegen(combatant);
     }
   }
 
@@ -783,8 +866,7 @@ export class RealtimeCombatEngine {
           if (source.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
           target.hp = Math.max(0, target.hp - effect.amountPerTick);
           if (target.hp > 0 && target.faction !== 'player' && this.canAttack(target, source)) {
-            target.aiState = 'combat';
-            this.clearNpcResetRegen(target);
+            this.enterCombat(target);
           }
           this.addDamageText(target.position, effect.amountPerTick, { color: 0xff5f5a, yOffset: -42, prefix: '-' });
           this.pushDamageEvent(source, target, '命中', effect.amountPerTick, undefined, effect.name);
@@ -911,10 +993,7 @@ export class RealtimeCombatEngine {
       target.hp = Math.max(0, target.hp - damage);
       if (target.hp > 0 && target.faction !== 'player') {
         if (target.faction === 'neutral') target.retaliationTargetId = attacker.id;
-        if (this.canAttack(target, attacker)) {
-          target.aiState = 'combat';
-          this.clearNpcResetRegen(target);
-        }
+        if (this.canAttack(target, attacker)) this.enterCombat(target);
       }
       this.pushDamageEvent(attacker, target, outcome, damage, hand, actionName);
       if (target.hp <= 0) this.pushDeathEvent(attacker, target);
