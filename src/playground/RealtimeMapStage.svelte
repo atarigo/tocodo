@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import { Application, Container, Graphics, Text } from 'pixi.js';
+  import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
   import { DEFAULT_LOADOUT } from '../data/equipmentCatalog.js';
   import type { GameScene } from './gameFlow.js';
   import { drawPlayerSprite, loadPlayerSpritesheet } from './playerSprite.js';
   import type { EquipmentLoadout } from '../core/types.js';
   import { ARENA_HEIGHT, ARENA_WIDTH } from '../core/types.js';
+  import novicePortalUrl from './assets/portals/novice-portal.png';
+  import cityPortalUrl from './assets/portals/city-portal.png';
 
   export interface MapNearbyState {
     novicePortal: boolean;
@@ -30,6 +32,8 @@
   let app: Application | undefined;
   let world: Container | undefined;
   let rafCleanup: (() => void) | undefined;
+  let novicePortalTexture: Texture | undefined;
+  let cityPortalTexture: Texture | undefined;
 
   const keys = new Set<string>();
   const player = { x: 240, y: 410 };
@@ -138,13 +142,31 @@
     if (label) drawLabel(layer, label, x, y + radius + 7, labelColor);
   }
 
-  function drawPortal(layer: Container, x: number, y: number): void {
-    const g = new Graphics();
-    g.ellipse(0, 0, 38, 54).fill({ color: 0x31406d, alpha: 0.88 });
-    g.ellipse(0, 0, 38, 54).stroke({ color: 0x7893ef, width: 5, alpha: 0.92 });
-    g.circle(0, 0, 28).fill({ color: 0xcfd9ff, alpha: 0.16 });
-    g.position.set(x, y);
-    layer.addChild(g);
+  async function loadPortalTextures(): Promise<void> {
+    if (novicePortalTexture && cityPortalTexture) return;
+    [novicePortalTexture, cityPortalTexture] = await Promise.all([
+      Assets.load<Texture>(novicePortalUrl),
+      Assets.load<Texture>(cityPortalUrl),
+    ]);
+  }
+
+  function drawPortal(layer: Container, x: number, y: number, kind: 'novice' | 'city'): void {
+    const texture = kind === 'city' ? cityPortalTexture : novicePortalTexture;
+    if (texture) {
+      const sprite = new Sprite({ texture, anchor: { x: 0.5, y: 0.82 } });
+      const targetHeight = kind === 'city' ? 92 : 84;
+      const scale = targetHeight / texture.height;
+      sprite.scale.set(scale);
+      sprite.position.set(x, y + 54);
+      layer.addChild(sprite);
+    } else {
+      const g = new Graphics();
+      g.ellipse(0, 0, 38, 54).fill({ color: kind === 'city' ? 0x4c2c70 : 0x31406d, alpha: 0.88 });
+      g.ellipse(0, 0, 38, 54).stroke({ color: kind === 'city' ? 0xb06df2 : 0x7893ef, width: 5, alpha: 0.92 });
+      g.circle(0, 0, 28).fill({ color: 0xcfd9ff, alpha: 0.16 });
+      g.position.set(x, y);
+      layer.addChild(g);
+    }
     drawLabel(layer, '傳送門', x, y + 62);
   }
 
@@ -152,7 +174,7 @@
     const ring = new Graphics();
     ring.ellipse(400, 300, 150, 92).stroke({ color: 0x8d8776, width: 17, alpha: 0.46 });
     layer.addChild(ring);
-    drawPortal(layer, 512, 246);
+    drawPortal(layer, 512, 246, 'novice');
     drawCircle(layer, 376, 204, 15, 0xcaa955, '說明 NPC', 0xffe6a4);
     const crowd = [
       [160, 180], [212, 252], [202, 430], [310, 160], [342, 438], [440, 410],
@@ -177,7 +199,7 @@
     shop.position.set(256, 270);
     layer.addChild(shop);
     drawLabel(layer, '商店', 256, 310, 0xd8ffe3);
-    drawPortal(layer, 560, 264);
+    drawPortal(layer, 560, 264, 'city');
   }
 
   function drawScene(): void {
@@ -246,7 +268,7 @@
         return;
       }
       app = localApp;
-      await loadPlayerSpritesheet();
+      await Promise.all([loadPlayerSpritesheet(), loadPortalTextures()]);
       host.appendChild(localApp.canvas);
       world = new Container();
       localApp.stage.addChild(world);
