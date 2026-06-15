@@ -3,7 +3,7 @@
   import { Application, Container, Graphics, Text } from 'pixi.js';
   import { DEFAULT_LOADOUT } from '../data/equipmentCatalog.js';
   import type { GameScene } from './gameFlow.js';
-  import { drawPlayerSprite } from './playerSprite.js';
+  import { drawPlayerSprite, loadPlayerSpritesheet } from './playerSprite.js';
   import type { EquipmentLoadout } from '../core/types.js';
   import { ARENA_HEIGHT, ARENA_WIDTH } from '../core/types.js';
 
@@ -246,6 +246,7 @@
         return;
       }
       app = localApp;
+      await loadPlayerSpritesheet();
       host.appendChild(localApp.canvas);
       world = new Container();
       localApp.stage.addChild(world);

@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import { Application, Container, Graphics, Text } from 'pixi.js';
   import { RealtimeCombatEngine } from '../core/engine.js';
-  import { handLoadout, drawPlayerSprite } from './playerSprite.js';
+  import { drawPlayerSprite, handLoadout, loadPlayerSpritesheet } from './playerSprite.js';
   import type { ActionBarState, BattleSetup, CombatEvent, Combatant, CombatStageSnapshot, InputState, StatusEffect, Strike, Vec2 } from '../core/types.js';
   import { ARENA_HEIGHT, ARENA_WIDTH } from '../core/types.js';
 
@@ -272,6 +272,7 @@
       }
 
       app = localApp;
+      await loadPlayerSpritesheet();
       host.appendChild(localApp.canvas);
       world = new Container();
       effectsLayer = new Container();
