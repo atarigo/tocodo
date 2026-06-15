@@ -23,6 +23,12 @@ const ENEMY_POSITIONS: Vec2[] = [
   { x: 290, y: 500 },
 ];
 
+const RANGED_SQUAD_POSITIONS: Vec2[] = [
+  { x: 555, y: 205 },
+  { x: 605, y: 235 },
+  { x: 545, y: 265 },
+];
+
 const ALLY_POSITIONS: Vec2[] = [
   { x: 300, y: 345 },
   { x: 260, y: 280 },
@@ -50,6 +56,15 @@ export const ENCOUNTERS: readonly EncounterDefinition[] = [
     members: [
       { enemyId: 'goblin', count: 5 },
       { enemyId: 'goblinKing', count: 1 },
+    ],
+  },
+  {
+    id: 'ranged-squad',
+    name: '遠程三人小隊',
+    members: [
+      { enemyId: 'bowSkirmisher', count: 1 },
+      { enemyId: 'pistolRaider', count: 1 },
+      { enemyId: 'rifleMarksman', count: 1 },
     ],
   },
   {
@@ -99,7 +114,14 @@ export function createEncounterSpawns(rank: DifficultyRank, seed: number): { nam
   for (const member of encounter.members) {
     for (let i = 0; i < member.count; i += 1) {
       const list = member.side === 'ally' ? allies : member.side === 'neutral' ? neutrals : enemies;
-      const positions = member.side === 'ally' ? ALLY_POSITIONS : member.side === 'neutral' ? NEUTRAL_POSITIONS : ENEMY_POSITIONS;
+      const positions =
+        encounter.id === 'ranged-squad' && member.side === undefined
+          ? RANGED_SQUAD_POSITIONS
+          : member.side === 'ally'
+            ? ALLY_POSITIONS
+            : member.side === 'neutral'
+              ? NEUTRAL_POSITIONS
+              : ENEMY_POSITIONS;
       const position = positions[list.length % positions.length];
       list.push({
         enemyId: member.enemyId,
@@ -120,6 +142,12 @@ function displayName(enemyId: EnemyArchetypeId): string {
       return '哥布林';
     case 'goblinKing':
       return '哥布林王';
+    case 'bowSkirmisher':
+      return '游擊弓手';
+    case 'pistolRaider':
+      return '手槍掠奪者';
+    case 'rifleMarksman':
+      return '步槍射手';
     case 'werewolf':
       return '狼人';
     case 'eliteWerewolf':
