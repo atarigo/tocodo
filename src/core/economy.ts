@@ -1,9 +1,9 @@
-import type { DifficultyRank } from './types.js';
+import type { Rank } from './types.js';
 
 // ─ 屬性升級花費（已定案 2026-06-12；A/S 級調漲）─
 // 起始 10、上限 255；費用依「目標值」所在區間計價，區間即屬性的階級標記。
 // 單屬性點滿 769,000；六邊形全滿 4,614,000。
-const ATTR_BRACKETS: { max: number; cost: number; rank: DifficultyRank }[] = [
+const ATTR_BRACKETS: { max: number; cost: number; rank: Rank }[] = [
   { max: 50, cost: 100, rank: 'D' },
   { max: 100, cost: 300, rank: 'C' },
   { max: 150, cost: 1000, rank: 'B' },
@@ -15,7 +15,7 @@ export const ATTR_START = 10;
 export const ATTR_MAX = 255;
 
 /** 屬性目前值的階級標記 */
-export function attrRank(value: number): DifficultyRank {
+export function attrRank(value: number): Rank {
   for (const bracket of ATTR_BRACKETS) {
     if (value <= bracket.max) return bracket.rank;
   }

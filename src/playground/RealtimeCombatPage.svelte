@@ -10,7 +10,7 @@
     CombatEvent,
     CombatHandSide,
     CombatStageSnapshot,
-    DifficultyRank,
+    Rank,
     EquipmentLoadout,
     SkillFailureReason,
     StatusEffect,
@@ -37,7 +37,7 @@
 
   let events = $state<CombatEvent[]>([]);
   let playerAttrs = $state<Attributes>({ str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 });
-  let enemyDifficulty = $state<DifficultyRank>('D');
+  let enemyDifficulty = $state<Rank>('D');
   let playerLoadout = $state<EquipmentLoadout>({ ...DEFAULT_LOADOUT });
   let actionLoadout = $state<ActionLoadout>({
     skillSlots: [...DEFAULT_ACTION_LOADOUT.skillSlots],

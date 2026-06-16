@@ -9,7 +9,25 @@ export type AiState = 'guard' | 'patrol' | 'combat' | 'returning';
 export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
 export type AttackMode = 'melee' | 'projectile';
 export type AmmoType = 'arrow' | 'bullet';
-export type DifficultyRank = 'D' | 'C' | 'B' | 'A' | 'S';
+export type Rank = 'D' | 'C' | 'B' | 'A' | 'S';
+
+export const RANKS: Rank[] = ['D', 'C', 'B', 'A', 'S'];
+
+export const RANK_LABELS: Record<Rank, string> = {
+  D: 'D 級',
+  C: 'C 級',
+  B: 'B 級',
+  A: 'A 級',
+  S: 'S 級',
+};
+
+export const RANK_BASE_PRICE: Record<Rank, number> = {
+  D: 4_000,
+  C: 15_000,
+  B: 50_000,
+  A: 150_000,
+  S: 550_000,
+};
 export type SkillId = 'charge' | 'bite' | 'heal';
 export type ItemId = 'smallHealthPotion';
 export type StatusId = 'bleed' | 'healing';
@@ -110,6 +128,8 @@ export interface CombatHand {
 export interface WeaponDefinition {
   id: string;
   name: string;
+  rank: Rank;
+  price?: number;
   slot: 'mainHand' | 'offHand';
   twoHanded: boolean;
   kind: WeaponKind;
@@ -144,6 +164,8 @@ export interface AmmoDefinition {
 export interface GearDefinition {
   id: string;
   name: string;
+  rank: Rank;
+  price?: number;
   slot: Exclude<EquipmentSlot, 'mainHand'>;
   armor: number;
   reductionRate: number;
@@ -192,7 +214,7 @@ export interface ArenaObstacle {
 }
 
 export interface BattleSetup {
-  difficulty?: DifficultyRank;
+  difficulty?: Rank;
   encounterName?: string;
   player: {
     name: string;

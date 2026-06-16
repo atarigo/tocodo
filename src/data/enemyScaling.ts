@@ -1,17 +1,8 @@
-import type { Attributes, DifficultyRank } from '../core/types.js';
+import type { Attributes, Rank } from '../core/types.js';
 import type { Rng } from '../core/rng.js';
 
-export const DIFFICULTY_LABELS: Record<DifficultyRank, string> = {
-  D: 'D 級',
-  C: 'C 級',
-  B: 'B 級',
-  A: 'A 級',
-  S: 'S 級',
-};
 
-export const DIFFICULTY_RANKS: DifficultyRank[] = ['D', 'C', 'B', 'A', 'S'];
-
-const RANK_ATTR_BUDGET: Record<DifficultyRank, number> = {
+const RANK_ATTR_BUDGET: Record<Rank, number> = {
   D: 60,
   C: 90,
   B: 135,
@@ -89,7 +80,7 @@ const ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
   },
 };
 
-export function scaledEnemyAttrs(archetypeId: EnemyArchetypeId, rank: DifficultyRank, rng: Rng): Attributes {
+export function scaledEnemyAttrs(archetypeId: EnemyArchetypeId, rank: Rank, rng: Rng): Attributes {
   const archetype = ARCHETYPES[archetypeId];
   const variance = 0.9 + rng() * 0.2;
   const budget = RANK_ATTR_BUDGET[rank] * archetype.multiplier * variance;

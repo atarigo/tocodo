@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ATTR_KEYS, ATTR_NAMES, type ActionLoadout, type Attributes, type BattleSetup, type DifficultyRank, type EnemySpawn, type EquipmentDefinition, type EquipmentLoadout, type EquipmentSlot, type ItemId, type SkillId, type WeaponDefinition } from '../core/types.js';
+  import { ATTR_KEYS, ATTR_NAMES, RANKS, RANK_LABELS, type ActionLoadout, type Attributes, type BattleSetup, type Rank, type EnemySpawn, type EquipmentDefinition, type EquipmentLoadout, type EquipmentSlot, type ItemId, type SkillId, type WeaponDefinition } from '../core/types.js';
   import { attackInterval, maxHp, maxMp } from '../core/formulas.js';
   import {
     EQUIPMENT_SLOT_LABELS,
@@ -10,7 +10,6 @@
     getWeapon,
     normalizeLoadout,
   } from '../data/equipmentCatalog.js';
-  import { DIFFICULTY_LABELS, DIFFICULTY_RANKS } from '../data/enemyScaling.js';
   import { ITEMS, itemById } from '../data/itemCatalog.js';
   import { SKILLS, skillById } from '../data/skillCatalog.js';
 
@@ -22,7 +21,7 @@
     battleSetup,
   }: {
     playerAttrs: Attributes;
-    enemyDifficulty: DifficultyRank;
+    enemyDifficulty: Rank;
     playerLoadout: EquipmentLoadout;
     actionLoadout: ActionLoadout;
     battleSetup: BattleSetup | null;
@@ -135,16 +134,16 @@
       <h2>敵方共用</h2>
       <label class="equip-row">
         <span>難度</span>
-        <select value={enemyDifficulty} onchange={(event) => (enemyDifficulty = event.currentTarget.value as DifficultyRank)}>
-          {#each DIFFICULTY_RANKS as rank}
-            <option value={rank}>{DIFFICULTY_LABELS[rank]}</option>
+        <select value={enemyDifficulty} onchange={(event) => (enemyDifficulty = event.currentTarget.value as Rank)}>
+          {#each RANKS as rank}
+            <option value={rank}>{RANK_LABELS[rank]}</option>
           {/each}
         </select>
       </label>
 
       {#if battleSetup}
         <div class="derived">
-          <span>{DIFFICULTY_LABELS[battleSetup.difficulty ?? enemyDifficulty]}</span>
+          <span>{RANK_LABELS[battleSetup.difficulty ?? enemyDifficulty]}</span>
           <span>{battleSetup.encounterName ?? '未命名遭遇'}</span>
         </div>
         <div class="enemy-info-list">

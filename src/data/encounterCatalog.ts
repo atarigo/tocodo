@@ -1,6 +1,6 @@
 import { createRng, pick } from '../core/rng.js';
 import { scaledEnemyAttrs, type EnemyArchetypeId } from './enemyScaling.js';
-import type { DifficultyRank, EnemySpawn, Vec2 } from '../core/types.js';
+import type { Rank, EnemySpawn, Vec2 } from '../core/types.js';
 
 interface EncounterMember {
   enemyId: EnemyArchetypeId;
@@ -104,7 +104,7 @@ function facingFor(position: Vec2): number {
   return Math.atan2(310 - position.y, 400 - position.x);
 }
 
-export function createEncounterSpawns(rank: DifficultyRank, seed: number): { name: string; enemies: EnemySpawn[]; allies: EnemySpawn[]; neutrals: EnemySpawn[] } {
+export function createEncounterSpawns(rank: Rank, seed: number): { name: string; enemies: EnemySpawn[]; allies: EnemySpawn[]; neutrals: EnemySpawn[] } {
   const rng = createRng(seed);
   const encounter = pick(rng, ENCOUNTERS);
   const enemies: EnemySpawn[] = [];

@@ -1,4 +1,4 @@
-import type { ActionLoadout, Attributes, BattleSetup, DifficultyRank, EnemySpawn, EquipmentLoadout } from '../core/types.js';
+import type { ActionLoadout, Attributes, BattleSetup, Rank, EnemySpawn, EquipmentLoadout } from '../core/types.js';
 import { DEFAULT_ACTION_LOADOUT } from '../core/battleSetup.js';
 import { enemyById } from '../data/enemyCatalog.js';
 
@@ -26,7 +26,7 @@ export interface DungeonStageDefinition {
 export interface DungeonRunDefinition {
   id: string;
   name: string;
-  rank: DifficultyRank;
+  rank: Rank;
   stages: DungeonStageDefinition[];
 }
 

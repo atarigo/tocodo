@@ -1,4 +1,4 @@
-import type { ActionLoadout, ArenaObstacle, Attributes, BattleSetup, DifficultyRank, EquipmentLoadout } from './types.js';
+import type { ActionLoadout, ArenaObstacle, Attributes, BattleSetup, Rank, EquipmentLoadout } from './types.js';
 import { createEncounterSpawns } from '../data/encounterCatalog.js';
 import { DEFAULT_LOADOUT } from '../data/equipmentCatalog.js';
 import { createRng } from './rng.js';
@@ -36,7 +36,7 @@ export function createRandomBattleSetup(params: {
   playerAttrs: Attributes;
   loadout: EquipmentLoadout;
   actionLoadout: ActionLoadout;
-  difficulty: DifficultyRank;
+  difficulty: Rank;
   seed: number;
 }): BattleSetup {
   const encounter = createEncounterSpawns(params.difficulty, params.seed);
