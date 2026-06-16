@@ -1,10 +1,10 @@
-import type { StatusId, StatusKind, StatusStackRule } from '../core/types.js';
+import type { StatusId, StatusKind } from '../core/types.js';
 
 export interface StatusDefinition {
   id: StatusId;
   name: string;
   kind: StatusKind;
-  stackRule: StatusStackRule;
+  maxStacks: number;
   effectType: 'damage' | 'heal';
   tickInterval: number;
 }
@@ -14,7 +14,7 @@ export const STATUSES: Record<StatusId, StatusDefinition> = {
     id: 'bleed',
     name: '出血',
     kind: 'debuff',
-    stackRule: 'stack',
+    maxStacks: 3,
     effectType: 'damage',
     tickInterval: 1,
   },
@@ -22,7 +22,7 @@ export const STATUSES: Record<StatusId, StatusDefinition> = {
     id: 'healing',
     name: '治療術',
     kind: 'buff',
-    stackRule: 'refresh',
+    maxStacks: 0,
     effectType: 'heal',
     tickInterval: 1,
   },

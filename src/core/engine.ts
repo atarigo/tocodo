@@ -9,7 +9,7 @@ import { itemById } from '../data/itemCatalog.js';
 import { createRng, type Rng } from './rng.js';
 import { skillById, type SkillDefinition } from '../data/skillCatalog.js';
 import { statusById } from '../data/statusCatalog.js';
-import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, EquipmentLoadout, Impact, InputState, ItemId, Projectile, SkillFailureReason, SkillId, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
+import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, EquipmentLoadout, Impact, InputState, ItemId, Projectile, Rank, SkillFailureReason, SkillId, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
@@ -831,7 +831,7 @@ export class RealtimeCombatEngine {
         if (this.rng() >= effect.chance) continue;
         if (effect.amount.kind === 'damageRatio' && lastDamage <= 0) continue;
         const amountPerTick = effect.amount.kind === 'damageRatio' ? Math.max(1, Math.round(lastDamage * effect.amount.ratio)) : Math.max(1, Math.round(target.maxHp * effect.amount.ratio));
-        if (amountPerTick > 0) this.applyStatus(attacker, target, effect.statusId, amountPerTick, effect.duration);
+        if (amountPerTick > 0) this.applyStatus(attacker, target, effect.statusId, skill.rank, amountPerTick, effect.duration);
       }
     }
   }
@@ -849,29 +849,31 @@ export class RealtimeCombatEngine {
     attacker.facing = angleTo(attacker.position, target.position);
   }
 
-  private applyStatus(source: Combatant, target: Combatant, statusId: StatusEffect['statusId'], amountPerTick: number, duration: number): void {
+  private applyStatus(source: Combatant, target: Combatant, statusId: StatusEffect['statusId'], rank: Rank, amountPerTick: number, duration: number): void {
     const status = statusById(statusId);
-    const existingIndex = this.statusEffects.findIndex((effect) => effect.statusId === statusId && effect.sourceId === source.id && effect.targetId === target.id);
-    if (existingIndex >= 0 && status.stackRule === 'refresh') {
-      const existing = this.statusEffects[existingIndex];
-      existing.amountPerTick = amountPerTick;
-      existing.remaining = duration;
-      existing.tickInterval = status.tickInterval;
-      existing.tickTimer = status.tickInterval;
+    const existing = this.statusEffects.find((e) => e.statusId === statusId && e.sourceId === source.id && e.targetId === target.id && e.rank === rank);
+    if (existing) {
+      if (status.maxStacks > 0 && existing.stacks < status.maxStacks) {
+        existing.stacks += 1;
+        existing.amountPerTick = amountPerTick;
+        existing.remaining = duration;
+        existing.tickTimer = Math.min(existing.tickTimer, status.tickInterval);
+      } else {
+        existing.amountPerTick = amountPerTick;
+        existing.remaining = duration;
+      }
       this.pushStatusEvent(source, target, status.name, 'apply');
       return;
-    }
-    if (existingIndex >= 0 && status.stackRule === 'replace') {
-      this.statusEffects.splice(existingIndex, 1);
     }
     this.statusEffects.push({
       id: this.nextEffectId++,
       statusId,
+      rank,
       name: status.name,
       kind: status.kind,
-      stackRule: status.stackRule,
       sourceId: source.id,
       targetId: target.id,
+      stacks: 1,
       amountPerTick,
       effectType: status.effectType,
       remaining: duration,
@@ -908,19 +910,20 @@ export class RealtimeCombatEngine {
       while (effect.tickTimer <= 0 && target.hp > 0) {
         effect.tickTimer += effect.tickInterval;
         target.flash = 0.18;
+        const tickAmount = effect.amountPerTick * effect.stacks;
         if (effect.effectType === 'damage') {
           if (source.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
-          target.hp = Math.max(0, target.hp - effect.amountPerTick);
-          this.addThreat(target, source, effect.amountPerTick);
+          target.hp = Math.max(0, target.hp - tickAmount);
+          this.addThreat(target, source, tickAmount);
           if (target.hp > 0 && target.faction !== 'player' && this.canAttack(target, source)) {
             this.enterCombat(target);
           }
-          this.addDamageText(target.position, effect.amountPerTick, { color: 0xff5f5a, yOffset: -42, prefix: '-' });
-          this.pushDamageEvent(source, target, '命中', effect.amountPerTick, undefined, effect.name);
+          this.addDamageText(target.position, tickAmount, { color: 0xff5f5a, yOffset: -42, prefix: '-' });
+          this.pushDamageEvent(source, target, '命中', tickAmount, undefined, effect.name);
           if (target.hp <= 0) this.pushDeathEvent(source, target);
         } else {
-          const applied = Math.max(0, Math.min(effect.amountPerTick, target.maxHp - target.hp));
-          target.hp = Math.min(target.maxHp, target.hp + effect.amountPerTick);
+          const applied = Math.max(0, Math.min(tickAmount, target.maxHp - target.hp));
+          target.hp = Math.min(target.maxHp, target.hp + tickAmount);
           if (applied > 0) this.addHealingThreat(source, target, applied);
           this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
           this.pushResourceEvent(source, target, 'hp', applied, effect.name);
