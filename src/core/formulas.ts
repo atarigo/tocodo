@@ -1,7 +1,27 @@
-// ─ 效果抗性（已定案 2026-06-12）─
-// 所有 debuff 的持續時間受意志影響：滿點意志 −70%（線性）。
+import type { Attributes } from './types.js';
+
+export function clampAttr(value: number): number {
+  return Math.max(0, value);
+}
+
+export function addAttrs(base: Attributes, extra: Partial<Attributes>): Attributes {
+  return {
+    str: clampAttr(base.str + (extra.str ?? 0)),
+    vit: clampAttr(base.vit + (extra.vit ?? 0)),
+    agi: clampAttr(base.agi + (extra.agi ?? 0)),
+    dex: clampAttr(base.dex + (extra.dex ?? 0)),
+    wil: clampAttr(base.wil + (extra.wil ?? 0)),
+    luk: clampAttr(base.luk + (extra.luk ?? 0)),
+  };
+}
+
+// ─ 效果抗性（飽和曲線）─
+// 所有 debuff 的持續時間受意志影響，最高接近 −70%
+const DEBUFF_RESIST_CAP = 0.7;
+const DEBUFF_RESIST_K = 128;
+
 export function debuffDuration(baseDuration: number, wil: number): number {
-  return baseDuration * (1 - (0.7 * wil) / 255);
+  return baseDuration * (1 - (DEBUFF_RESIST_CAP * wil) / (wil + DEBUFF_RESIST_K));
 }
 
 // ─ 生命與精神（已定案 2026-06-12）─

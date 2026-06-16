@@ -79,29 +79,29 @@ export function evadeWidth(luk: number): number {
   return (EVADE_CAP * luk) / (luk + EVADE_K);
 }
 
-// ─ 閃避（已定案 2026-06-12）─
-// 原則：防守天生吃虧——防禦是減傷不是抵銷，不能有靠屬性無解的全防流；
-// 但敏捷不加傷害、是純減傷投資，所以也不能被靈巧完全吃掉。
-// 閃避 =（40% × 守方敏捷 ÷ 255）×（1 − 0.5 × 攻方靈巧 ÷ 255）
-// 敏捷滿 vs 靈巧 0 → 40%；敏捷滿 vs 靈巧滿 → 20%（壓制上限是砍半）。
+// ─ 閃避（飽和曲線）─
+// 閃避 = 上限 × agi ÷ (agi + K)，最高接近 40%
+// 壓制 = 上限 × dex ÷ (dex + K)，最高壓制接近 50%
+// 255 敏捷 vs 0 靈巧 → ~33%；255 敏捷 vs 255 靈巧 → ~17%
 const DODGE_CAP = 0.4;
+const DODGE_K = 128;
 const DODGE_SUPPRESS_CAP = 0.5;
+const DODGE_SUPPRESS_K = 128;
 
 export function dodgeWidth(defenderAgi: number, attackerDex: number): number {
-  const base = (DODGE_CAP * defenderAgi) / 255;
-  const suppression = 1 - (DODGE_SUPPRESS_CAP * attackerDex) / 255;
+  const base = (DODGE_CAP * defenderAgi) / (defenderAgi + DODGE_K);
+  const suppression = 1 - (DODGE_SUPPRESS_CAP * attackerDex) / (attackerDex + DODGE_SUPPRESS_K);
   return base * suppression;
 }
 
-// ─ 暴擊（已定案 2026-06-12）─
-// 線性成長：暴擊在 bar 尾端、會被守方防禦段擠壓，有天然反制，
-// 不像躲避需要曲線自我節制。幸運 255 → 30%。
-// 要害已從設計中移除（2026-06-12）；倍率單純 ×1.5，不再複雜化。
+// ─ 暴擊（飽和曲線）─
+// 暴擊 = 上限 × luk ÷ (luk + K)，最高接近 30%
 const CRIT_CAP = 0.3;
+const CRIT_K = 128;
 export const CRIT_MULTIPLIER = 1.5;
 
 export function critWidth(luk: number): number {
-  return (CRIT_CAP * luk) / 255;
+  return (CRIT_CAP * luk) / (luk + CRIT_K);
 }
 
 export function buildAttackTable(ctx: AttackTableContext): TableSegment[] {
