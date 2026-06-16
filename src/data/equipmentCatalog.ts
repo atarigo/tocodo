@@ -14,6 +14,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'iron-sword',
     name: '鐵劍',
+    rank: 'D',
     slot: 'mainHand',
     twoHanded: false,
     kind: '近戰',
@@ -31,6 +32,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'dagger',
     name: '短刀',
+    rank: 'D',
     slot: 'mainHand',
     twoHanded: false,
     kind: '近戰',
@@ -48,6 +50,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'greatsword',
     name: '巨劍',
+    rank: 'D',
     slot: 'mainHand',
     twoHanded: true,
     kind: '近戰',
@@ -65,6 +68,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'spear',
     name: '長槍',
+    rank: 'D',
     slot: 'mainHand',
     twoHanded: true,
     kind: '近戰',
@@ -82,6 +86,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'hunting-bow',
     name: '獵弓',
+    rank: 'D',
     slot: 'mainHand',
     twoHanded: true,
     kind: '弓',
@@ -100,6 +105,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'pistol',
     name: '手槍',
+    rank: 'D',
     slot: 'mainHand',
     twoHanded: false,
     kind: '槍',
@@ -118,6 +124,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'revolver',
     name: '重型左輪',
+    rank: 'D',
     slot: 'offHand',
     twoHanded: false,
     kind: '槍',
@@ -136,6 +143,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'offhand-dagger',
     name: '副手短刀',
+    rank: 'D',
     slot: 'offHand',
     twoHanded: false,
     kind: '近戰',
@@ -153,6 +161,7 @@ export const WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'rifle',
     name: '步槍',
+    rank: 'D',
     slot: 'mainHand',
     twoHanded: true,
     kind: '槍',
@@ -171,15 +180,15 @@ export const WEAPONS: readonly WeaponDefinition[] = [
 ];
 
 export const GEAR: readonly GearDefinition[] = [
-  { id: 'wooden-shield', name: '木盾', slot: 'offHand', armor: 1, reductionRate: 0, parryRate: 0, blockRate: 0.25 },
-  { id: 'leather-cap', name: '皮帽', slot: 'head', armor: 1, reductionRate: 0, parryRate: 0, blockRate: 0 },
-  { id: 'leather-armor', name: '皮甲', slot: 'body', armor: 2, reductionRate: 0.03, parryRate: 0, blockRate: 0 },
-  { id: 'leather-pants', name: '皮褲', slot: 'legs', armor: 1, reductionRate: 0.01, parryRate: 0, blockRate: 0 },
-  { id: 'leather-boots', name: '皮靴', slot: 'feet', armor: 1, reductionRate: 0, parryRate: 0, blockRate: 0 },
-  { id: 'iron-helm', name: '鐵盔', slot: 'head', armor: 2, reductionRate: 0.01, parryRate: 0, blockRate: 0 },
-  { id: 'iron-armor', name: '鐵甲', slot: 'body', armor: 5, reductionRate: 0.08, parryRate: 0, blockRate: 0 },
-  { id: 'iron-greaves', name: '鐵腿甲', slot: 'legs', armor: 3, reductionRate: 0.03, parryRate: 0, blockRate: 0 },
-  { id: 'iron-boots', name: '鐵靴', slot: 'feet', armor: 2, reductionRate: 0.01, parryRate: 0, blockRate: 0 },
+  { id: 'wooden-shield', name: '木盾', rank: 'D', slot: 'offHand', armor: 1, reductionRate: 0, parryRate: 0, blockRate: 0.25 },
+  { id: 'leather-cap', name: '皮帽', rank: 'D', slot: 'head', armor: 1, reductionRate: 0, parryRate: 0, blockRate: 0 },
+  { id: 'leather-armor', name: '皮甲', rank: 'D', slot: 'body', armor: 2, reductionRate: 0.03, parryRate: 0, blockRate: 0 },
+  { id: 'leather-pants', name: '皮褲', rank: 'D', slot: 'legs', armor: 1, reductionRate: 0.01, parryRate: 0, blockRate: 0 },
+  { id: 'leather-boots', name: '皮靴', rank: 'D', slot: 'feet', armor: 1, reductionRate: 0, parryRate: 0, blockRate: 0 },
+  { id: 'iron-helm', name: '鐵盔', rank: 'D', slot: 'head', armor: 2, reductionRate: 0.01, parryRate: 0, blockRate: 0 },
+  { id: 'iron-armor', name: '鐵甲', rank: 'D', slot: 'body', armor: 5, reductionRate: 0.08, parryRate: 0, blockRate: 0 },
+  { id: 'iron-greaves', name: '鐵腿甲', rank: 'D', slot: 'legs', armor: 3, reductionRate: 0.03, parryRate: 0, blockRate: 0 },
+  { id: 'iron-boots', name: '鐵靴', rank: 'D', slot: 'feet', armor: 2, reductionRate: 0.01, parryRate: 0, blockRate: 0 },
 ];
 
 export const EQUIPMENT: readonly EquipmentDefinition[] = [...WEAPONS, ...GEAR];

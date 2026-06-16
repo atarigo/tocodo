@@ -3,6 +3,7 @@ import type { EquipmentDefinition, GearDefinition, WeaponDefinition } from '../c
 export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   {
     id: 'wolf-claw-main',
+    rank: 'D',
     name: '狼爪',
     slot: 'mainHand',
     twoHanded: false,
@@ -21,6 +22,7 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   },
   {
     id: 'wolf-claw-off',
+    rank: 'D',
     name: '副狼爪',
     slot: 'offHand',
     twoHanded: false,
@@ -39,6 +41,7 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   },
   {
     id: 'elite-wolf-claw-main',
+    rank: 'D',
     name: '精銳狼爪',
     slot: 'mainHand',
     twoHanded: false,
@@ -57,6 +60,7 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   },
   {
     id: 'elite-wolf-claw-off',
+    rank: 'D',
     name: '副精銳狼爪',
     slot: 'offHand',
     twoHanded: false,
@@ -75,6 +79,7 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   },
   {
     id: 'alpha-claw-main',
+    rank: 'D',
     name: '首領巨爪',
     slot: 'mainHand',
     twoHanded: false,
@@ -93,6 +98,7 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   },
   {
     id: 'alpha-claw-off',
+    rank: 'D',
     name: '副首領巨爪',
     slot: 'offHand',
     twoHanded: false,
@@ -111,6 +117,7 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   },
   {
     id: 'blood-claw-main',
+    rank: 'D',
     name: '血爪',
     slot: 'mainHand',
     twoHanded: false,
@@ -129,6 +136,7 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   },
   {
     id: 'blood-claw-off',
+    rank: 'D',
     name: '副血爪',
     slot: 'offHand',
     twoHanded: false,
@@ -147,6 +155,7 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   },
   {
     id: 'noble-blood-fang',
+    rank: 'D',
     name: '貴族血牙',
     slot: 'mainHand',
     twoHanded: false,
@@ -165,6 +174,7 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
   },
   {
     id: 'noble-blood-claw-off',
+    rank: 'D',
     name: '副貴族血爪',
     slot: 'offHand',
     twoHanded: false,
@@ -184,11 +194,11 @@ export const NATURAL_WEAPONS: readonly WeaponDefinition[] = [
 ];
 
 export const NATURAL_GEAR: readonly GearDefinition[] = [
-  { id: 'wolf-hide', name: '厚毛皮', slot: 'body', armor: 1, reductionRate: 0.02, parryRate: 0, blockRate: 0 },
-  { id: 'elite-wolf-hide', name: '精銳厚毛皮', slot: 'body', armor: 2, reductionRate: 0.04, parryRate: 0, blockRate: 0 },
-  { id: 'alpha-hide', name: '首領厚毛皮', slot: 'body', armor: 3, reductionRate: 0.06, parryRate: 0, blockRate: 0 },
-  { id: 'vampire-body', name: '吸血鬼體質', slot: 'body', armor: 1, reductionRate: 0.03, parryRate: 0.02, blockRate: 0 },
-  { id: 'ancient-vampire-body', name: '古老吸血鬼體質', slot: 'body', armor: 3, reductionRate: 0.08, parryRate: 0.03, blockRate: 0 },
+  { id: 'wolf-hide', rank: 'D', name: '厚毛皮', slot: 'body', armor: 1, reductionRate: 0.02, parryRate: 0, blockRate: 0 },
+  { id: 'elite-wolf-hide', rank: 'D', name: '精銳厚毛皮', slot: 'body', armor: 2, reductionRate: 0.04, parryRate: 0, blockRate: 0 },
+  { id: 'alpha-hide', rank: 'D', name: '首領厚毛皮', slot: 'body', armor: 3, reductionRate: 0.06, parryRate: 0, blockRate: 0 },
+  { id: 'vampire-body', rank: 'D', name: '吸血鬼體質', slot: 'body', armor: 1, reductionRate: 0.03, parryRate: 0.02, blockRate: 0 },
+  { id: 'ancient-vampire-body', rank: 'D', name: '古老吸血鬼體質', slot: 'body', armor: 3, reductionRate: 0.08, parryRate: 0.03, blockRate: 0 },
 ];
 
 export const NATURAL_EQUIPMENT: readonly EquipmentDefinition[] = [...NATURAL_WEAPONS, ...NATURAL_GEAR];

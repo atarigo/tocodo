@@ -1,4 +1,4 @@
-import type { SkillId, StatusId } from '../core/types.js';
+import type { Rank, SkillId, StatusId } from '../core/types.js';
 
 export type SkillTargetType = 'self' | 'enemy';
 
@@ -30,6 +30,8 @@ export type SkillEffect =
 export interface SkillDefinition {
   id: SkillId;
   name: string;
+  rank: Rank;
+  price?: number;
   cooldown: number;
   targetType: SkillTargetType;
   effects: SkillEffect[];
@@ -44,6 +46,7 @@ export const SKILLS: Record<SkillId, SkillDefinition> = {
   charge: {
     id: 'charge',
     name: '衝鋒',
+    rank: 'D',
     cooldown: 15,
     targetType: 'enemy',
     minRange: 110,
@@ -57,6 +60,7 @@ export const SKILLS: Record<SkillId, SkillDefinition> = {
   bite: {
     id: 'bite',
     name: '撕咬',
+    rank: 'D',
     cooldown: 4,
     targetType: 'enemy',
     requiresMeleeRange: true,
@@ -75,6 +79,7 @@ export const SKILLS: Record<SkillId, SkillDefinition> = {
   heal: {
     id: 'heal',
     name: '治療術',
+    rank: 'D',
     cooldown: 20,
     targetType: 'self',
     mpCost: 2,
