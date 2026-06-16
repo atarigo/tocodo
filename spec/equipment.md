@@ -12,15 +12,25 @@
 - 副手：盾牌（提供格檔率）或副手武器（雙持）
 - 雙手武器佔滿主副手
 
+## 等階與精煉
+
+武器和裝備都有 **等階**（D/C/B/A/S）和 **精煉等級**（1〜11）。
+
+- 精煉提升等級，每級的效果由各物件自行定義（例如每級 +10% 基礎傷害、或增加護甲值）
+- 等階升級方式待定（非捲軸，可能是特殊材料或副本獎勵）
+- 升階後精煉等級重置為 1
+
+一把武器需要設計 **5 階 × 11 等 = 55 種狀態**。裝備同理。
+
 ## 武器
 
 武器定義核心屬性：
 
 ```typescript
-interface WeaponDefinition {
+interface WeaponBlueprint {
   id: string;
   name: string;
-  rank: Rank;                    // 五階制
+  defaultRank: Rank;             // 預設等階
   kind: WeaponKind;              // '近戰' | '槍' | '弓' | '法杖'
   damage: [min, max];            // 大小傷區間
   balance: number;               // 0〜0.8，平衡（擲骰中心）

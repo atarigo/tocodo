@@ -153,9 +153,9 @@
 
 ### Phase 0：基礎架構（被所有東西依賴）
 
-- [ ] **T01** 恢復 Rank 型別、RANK_PRIORITY、RANK_PRICE 到 types.ts（P8）
-- [ ] **T02** 恢復 Priced 介面，為武器/裝備/技能加上 rank 和 price 欄位（Q1/Q2/Q6/Q7/S1/S2）
-- [ ] **T03** 恢復 clampAttr / addAttrs 輔助函式（A9）
+- [x] **T01** 建立統一的 Rank 型別取代 DifficultyRank，加入 RANK_BASE_PRICE 基準定價常數（P8/M5）
+- [x] **T02** 為武器/裝備/技能定義加上 rank、price、等級相關欄位（Q1/Q2/Q6/Q7/S1/S2）
+- [x] **T03** 恢復 clampAttr / addAttrs 輔助函式（A9）
 - [ ] **T04** 統一貨幣變數名為 rewardPoints，移除 currency 殘留（M1）
 
 ### Phase 1：效果系統重建（⚠️ 需討論疊加規則）

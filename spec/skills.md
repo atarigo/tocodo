@@ -6,13 +6,24 @@
 
 資源結算點在「技能出手」那一刻：詠唱中被打斷不扣精神、不進冷卻；但施放出去就算施放了——落空、被閃避照樣扣精神、進入冷卻。
 
+## 等階與等級
+
+每個技能有 **等階**（D/C/B/A/S）和 **等級**（1〜11）。
+
+- 技能預設等階由技能本身決定（例如「重斬」預設 D 階）
+- 等級從 1 開始，每升一級的效果由各技能自行定義（例如每級 +10% 傷害、或增加效果持續時間）
+- 等階升級需要**技能升階捲軸**，升階後的數值是預先設計好的
+- 升階後等級重置為 1
+
+一個技能需要設計 **5 階 × 11 等 = 55 種狀態**。
+
 ## 技能定義結構
 
 ```typescript
-interface Skill {
+interface SkillBlueprint {
   id: string;
   name: string;
-  rank: Rank;                          // 五階制：D/C/B/A/S
+  defaultRank: Rank;                   // 預設等階
   price?: number;                      // 一般商店價格；無 = 只能副本取得
   weaponKind?: WeaponKind;             // 需要特定武器類型（近戰/槍/弓/法杖）
   castTime: number;                    // 秒；0 = 瞬發
@@ -20,10 +31,12 @@ interface Skill {
   mpCost: number;                      // 精神消耗
   canBeParried: boolean;               // 可否被招架
   canBeBlocked: boolean;               // 可否被格檔
-  damage?: SkillDamage;                // 傷害公式
+  damage?: SkillDamage;                // 傷害公式（基礎值，受等階×等級影響）
   heal?: { base: number; scaling?: Partial<Attributes> };  // 治療
   applies?: EffectSpec[];              // 附加效果（對應效果名錄）
   effectsIgnoreBreak?: boolean;        // 未破防仍可附加效果
+  levelScaling: LevelScaling;          // 每級成長方式（各技能自行定義）
+  rankUpEffects: Record<Rank, RankUpEffect>;  // 各階的升階效果（預先設計）
   description: string;
 }
 ```
