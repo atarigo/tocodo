@@ -22,7 +22,7 @@ export function attrRank(value: number): Rank {
   return 'S';
 }
 
-/** 從 current 升到 current+1 的貨幣花費 */
+/** 從 current 升到 current+1 的獎勵點花費 */
 export function attrUpgradeCost(current: number): number {
   const target = Math.min(current + 1, ATTR_MAX);
   for (const bracket of ATTR_BRACKETS) {
@@ -31,7 +31,7 @@ export function attrUpgradeCost(current: number): number {
   return ATTR_BRACKETS[ATTR_BRACKETS.length - 1].cost;
 }
 
-/** 從起始 10 升到 value 的累計花費 */
+/** 從起始 10 升到 value 的累計獎勵點花費 */
 export function attrTotalSpent(value: number): number {
   let total = 0;
   for (let v = ATTR_START; v < Math.min(value, ATTR_MAX); v++) {
