@@ -906,27 +906,29 @@ export class RealtimeCombatEngine {
         this.statusEffects.splice(i, 1);
         continue;
       }
-      effect.tickTimer -= dt;
-      while (effect.tickTimer <= 0 && target.hp > 0) {
-        effect.tickTimer += effect.tickInterval;
-        target.flash = 0.18;
-        const tickAmount = effect.amountPerTick * effect.stacks;
-        if (effect.effectType === 'damage') {
-          if (source.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
-          target.hp = Math.max(0, target.hp - tickAmount);
-          this.addThreat(target, source, tickAmount);
-          if (target.hp > 0 && target.faction !== 'player' && this.canAttack(target, source)) {
-            this.enterCombat(target);
+      if (effect.effectType === 'dot' || effect.effectType === 'hot') {
+        effect.tickTimer -= dt;
+        while (effect.tickTimer <= 0 && target.hp > 0) {
+          effect.tickTimer += effect.tickInterval;
+          target.flash = 0.18;
+          const tickAmount = effect.amountPerTick * effect.stacks;
+          if (effect.effectType === 'dot') {
+            if (source.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
+            target.hp = Math.max(0, target.hp - tickAmount);
+            this.addThreat(target, source, tickAmount);
+            if (target.hp > 0 && target.faction !== 'player' && this.canAttack(target, source)) {
+              this.enterCombat(target);
+            }
+            this.addDamageText(target.position, tickAmount, { color: 0xff5f5a, yOffset: -42, prefix: '-' });
+            this.pushDamageEvent(source, target, '命中', tickAmount, undefined, effect.name);
+            if (target.hp <= 0) this.pushDeathEvent(source, target);
+          } else {
+            const applied = Math.max(0, Math.min(tickAmount, target.maxHp - target.hp));
+            target.hp = Math.min(target.maxHp, target.hp + tickAmount);
+            if (applied > 0) this.addHealingThreat(source, target, applied);
+            this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
+            this.pushResourceEvent(source, target, 'hp', applied, effect.name);
           }
-          this.addDamageText(target.position, tickAmount, { color: 0xff5f5a, yOffset: -42, prefix: '-' });
-          this.pushDamageEvent(source, target, '命中', tickAmount, undefined, effect.name);
-          if (target.hp <= 0) this.pushDeathEvent(source, target);
-        } else {
-          const applied = Math.max(0, Math.min(tickAmount, target.maxHp - target.hp));
-          target.hp = Math.min(target.maxHp, target.hp + tickAmount);
-          if (applied > 0) this.addHealingThreat(source, target, applied);
-          this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
-          this.pushResourceEvent(source, target, 'hp', applied, effect.name);
         }
       }
       effect.remaining -= dt;

@@ -30,7 +30,14 @@ export const RANK_BASE_PRICE: Record<Rank, number> = {
 };
 export type SkillId = 'charge' | 'bite' | 'heal';
 export type ItemId = 'smallHealthPotion';
-export type StatusId = 'bleed' | 'healing';
+export type StatusId =
+  | 'bleed' | 'bleedPercent' | 'poison' | 'poisonPercent' | 'burn'
+  | 'regen' | 'healing'
+  | 'armorBreak' | 'armorBuff'
+  | 'reductionBreak' | 'reductionBuff'
+  | 'castSlow' | 'castHaste'
+  | 'attackSlow' | 'attackHaste' | 'iceSlow'
+  | 'freeze' | 'stun' | 'silence';
 export type StatusKind = 'buff' | 'debuff';
 
 export type EquipmentSlot = 'mainHand' | 'offHand' | 'head' | 'body' | 'legs' | 'feet';
@@ -277,7 +284,7 @@ export interface StatusEffect {
   targetId: number;
   stacks: number;
   amountPerTick: number;
-  effectType: 'damage' | 'heal';
+  effectType: 'dot' | 'hot' | 'modifier' | 'toggle';
   remaining: number;
   tickInterval: number;
   tickTimer: number;
