@@ -4,7 +4,7 @@ import { buildAttackTable, resolveDamage, rollOutcome, type AttackOutcome } from
 import { createDefaultBattleSetup } from './battleSetup.js';
 import { enemyById } from '../data/enemyCatalog.js';
 import { equipmentDefense, getOffhandWeapon, getWeapon, normalizeLoadout } from '../data/equipmentCatalog.js';
-import { attackInterval, balanceRoll, effectiveBalance, maxHp, maxMp } from './formulas.js';
+import { attackInterval, balanceRoll, debuffDuration, effectiveBalance, maxHp, maxMp } from './formulas.js';
 import { itemById } from '../data/itemCatalog.js';
 import { createRng, type Rng } from './rng.js';
 import { skillById, type SkillDefinition } from '../data/skillCatalog.js';
@@ -644,7 +644,7 @@ export class RealtimeCombatEngine {
       const targetAngle = angleTo(attacker.position, target.position);
       const arc = attackArcOf(hand);
       if (targetInMeleeRange(attacker, target, hand) && angleDelta(attacker.facing, targetAngle) <= arc / 2 && this.hasLineOfSight(attacker.position, target.position)) {
-        const damage = this.resolveBasicAttackWithWeapon(attacker, target, hand.weapon, hand.side);
+        const { damage } = this.resolveBasicAttackWithWeapon(attacker, target, hand.weapon, hand.side);
         if (damage > 0) {
           target.flash = 0.22;
           this.addImpact(target.position);
@@ -736,7 +736,7 @@ export class RealtimeCombatEngine {
       for (const target of this.attackableTargetsFor(attacker)) {
         if (target.hp <= 0) continue;
         if (distance(projectile.position, target.position) > projectile.radius + target.radius) continue;
-        const damage = this.resolveBasicAttackWithWeapon(attacker, target, weapon, projectile.hand);
+        const { damage } = this.resolveBasicAttackWithWeapon(attacker, target, weapon, projectile.hand);
         if (damage > 0) {
           target.flash = 0.25;
           this.addImpact(projectile.position);
@@ -812,6 +812,7 @@ export class RealtimeCombatEngine {
     attacker.skillCooldowns[skill.id] = skill.cooldown;
 
     let lastDamage = 0;
+    let lastHit = false;
     for (const effect of skill.effects) {
       if (effect.kind === 'moveToTarget') {
         this.moveNearTarget(attacker, target, effect.stopDistanceBonus);
@@ -819,7 +820,9 @@ export class RealtimeCombatEngine {
       }
       if (effect.kind === 'damage') {
         const hand = this.meleeHandFor(attacker) ?? attacker.hands[0];
-        lastDamage = this.resolveAttackWithWeapon(attacker, target, hand?.weapon, hand?.side, effect.multiplier, skill.name);
+        const hit = this.resolveAttackWithWeapon(attacker, target, hand?.weapon, hand?.side, effect.multiplier, skill.name);
+        lastDamage = hit.damage;
+        lastHit = hit.damage > 0 || hit.brokeDefense;
         if (lastDamage > 0) {
           target.flash = 0.22;
           this.addImpact(target.position);
@@ -828,6 +831,7 @@ export class RealtimeCombatEngine {
         continue;
       }
       if (effect.kind === 'applyStatus') {
+        if (!lastHit) continue;
         if (this.rng() >= effect.chance) continue;
         if (effect.amount.kind === 'damageRatio' && lastDamage <= 0) continue;
         const amountPerTick = effect.amount.kind === 'damageRatio' ? Math.max(1, Math.round(lastDamage * effect.amount.ratio)) : Math.max(1, Math.round(target.maxHp * effect.amount.ratio));
@@ -851,16 +855,17 @@ export class RealtimeCombatEngine {
 
   private applyStatus(source: Combatant, target: Combatant, statusId: StatusEffect['statusId'], rank: Rank, amountPerTick: number, duration: number): void {
     const status = statusById(statusId);
+    const effectiveDuration = status.kind === 'debuff' ? debuffDuration(duration, target.attrs.wil) : duration;
     const existing = this.statusEffects.find((e) => e.statusId === statusId && e.sourceId === source.id && e.targetId === target.id && e.rank === rank);
     if (existing) {
       if (status.maxStacks > 0 && existing.stacks < status.maxStacks) {
         existing.stacks += 1;
         existing.amountPerTick = amountPerTick;
-        existing.remaining = duration;
+        existing.remaining = effectiveDuration;
         existing.tickTimer = Math.min(existing.tickTimer, status.tickInterval);
       } else {
         existing.amountPerTick = amountPerTick;
-        existing.remaining = duration;
+        existing.remaining = effectiveDuration;
       }
       this.pushStatusEvent(source, target, status.name, 'apply');
       return;
@@ -876,7 +881,7 @@ export class RealtimeCombatEngine {
       stacks: 1,
       amountPerTick,
       effectType: status.effectType,
-      remaining: duration,
+      remaining: effectiveDuration,
       tickInterval: status.tickInterval,
       tickTimer: status.tickInterval,
     });
@@ -1058,11 +1063,11 @@ export class RealtimeCombatEngine {
     }
   }
 
-  private resolveBasicAttackWithWeapon(attacker: Combatant, target: Combatant, weapon?: WeaponDefinition, hand?: CombatHandSide): number {
+  private resolveBasicAttackWithWeapon(attacker: Combatant, target: Combatant, weapon?: WeaponDefinition, hand?: CombatHandSide): { damage: number; brokeDefense: boolean } {
     return this.resolveAttackWithWeapon(attacker, target, weapon, hand, 1, '普攻');
   }
 
-  private resolveAttackWithWeapon(attacker: Combatant, target: Combatant, weapon: WeaponDefinition | undefined, hand: CombatHandSide | undefined, damageMultiplier: number, actionName: string): number {
+  private resolveAttackWithWeapon(attacker: Combatant, target: Combatant, weapon: WeaponDefinition | undefined, hand: CombatHandSide | undefined, damageMultiplier: number, actionName: string): { damage: number; brokeDefense: boolean } {
     if (attacker.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
     const table = buildAttackTable({
       attacker: attacker.attrs,
@@ -1077,7 +1082,7 @@ export class RealtimeCombatEngine {
     const outcome = rollOutcome(table, this.rng);
     const base = baseDamageWithWeapon(attacker, this.rng, weapon);
     const result = resolveDamage(outcome, base, { armor: target.armor, reductionRate: target.reductionRate }, damageMultiplier);
-    const damage = result.damage;
+    const { damage, brokeDefense } = result;
 
     if (damage > 0) {
       target.hp = Math.max(0, target.hp - damage);
@@ -1091,7 +1096,7 @@ export class RealtimeCombatEngine {
     } else {
       this.pushMissEvent(attacker, target, outcome, hand, actionName);
     }
-    return damage;
+    return { damage, brokeDefense };
   }
 
   private definitionFor(enemy: Combatant): EnemyDefinition {

@@ -23,10 +23,15 @@ interface DungeonDefinition {
   scenes: SceneDefinition[];          // 多場景，依序推進
 }
 
+interface SceneEnemySpawn extends EnemySpawn {
+  boss?: boolean;                     // 標記為首領：啟用碾壓（預設 15%），可自訂碾壓率
+  crushRate?: number;                 // 自訂碾壓率（僅首領有效，預設 0.15）
+}
+
 interface SceneDefinition {
   id: string;
   title: string;
-  enemies: EnemySpawn[];              // 敵人配置
+  enemies: SceneEnemySpawn[];         // 敵人配置（可標記首領）
   allies?: NpcSpawn[];                // 輔助 NPC（不可控，固定 AI）
   neutrals?: NpcSpawn[];              // 中立 NPC（可能提供交易等）
   obstacles?: ArenaObstacle[];        // 場地障礙物

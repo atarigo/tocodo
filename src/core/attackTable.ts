@@ -196,6 +196,7 @@ export function resolveDamage(
   if (outcome === '暴擊') incoming *= CRIT_MULTIPLIER;
   if (outcome === '碾壓') incoming *= CRUSH_MULTIPLIER;
   const armor = pierce ? 0 : defense.armor;
+  if (incoming <= armor / 3) return { damage: 0, brokeDefense: false };
   if (incoming <= armor) return { damage: 1, brokeDefense: false };
   let damage = (incoming - armor) * (1 - defense.reductionRate);
   if (outcome === '招架') damage *= 1 - PARRY_DAMAGE_REDUCTION;
