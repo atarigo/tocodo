@@ -11,7 +11,6 @@ export interface StatusDefinition {
   effectType: StatusEffectType;
   maxStacks: number;
   tickInterval: number;
-  poison?: boolean;
   modifier?: {
     target: ModifierTarget;
     unit: ModifierUnit;
@@ -22,8 +21,8 @@ export const STATUSES: Record<StatusId, StatusDefinition> = {
   // 持續跳動型（傷害）
   bleed: { id: 'bleed', name: '出血', kind: 'debuff', effectType: 'dot', maxStacks: 3, tickInterval: 1 },
   bleedPercent: { id: 'bleedPercent', name: '流血', kind: 'debuff', effectType: 'dot', maxStacks: 3, tickInterval: 1 },
-  poison: { id: 'poison', name: '中毒', kind: 'debuff', effectType: 'dot', maxStacks: 3, tickInterval: 1, poison: true },
-  poisonPercent: { id: 'poisonPercent', name: '劇毒', kind: 'debuff', effectType: 'dot', maxStacks: 3, tickInterval: 1, poison: true },
+  poison: { id: 'poison', name: '中毒', kind: 'debuff', effectType: 'dot', maxStacks: 3, tickInterval: 1 },
+  poisonPercent: { id: 'poisonPercent', name: '劇毒', kind: 'debuff', effectType: 'dot', maxStacks: 3, tickInterval: 1 },
   burn: { id: 'burn', name: '燃燒', kind: 'debuff', effectType: 'dot', maxStacks: 3, tickInterval: 1 },
 
   // 持續跳動型（治療）
