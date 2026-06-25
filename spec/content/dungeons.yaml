@@ -1,0 +1,115 @@
+# 副本定義
+# 每個副本是手工設計的多場景關卡
+# 勝利條件類型：killAll, killCount, killTarget, survive, escort, interact
+# 條件要求：required（必須）、optional（額外獎勵）、any-of（擇一）
+
+# ─── 副本結構說明 ───
+#
+# dungeon:
+#   rank: D/C/B/A/S
+#   scenes:
+#     - enemies:
+#         - archetype: 敵人原型 ID
+#           count: 數量
+#           boss: true/false（標記為首領，啟用碾壓）
+#           crushRate: 0.15（自訂碾壓率，預設 0.15）
+#       allies: [...]          # 輔助 NPC（不可控 AI）
+#       neutrals: [...]        # 中立 NPC（交易）
+#       sceneModifiers: [...]  # 場景規則（modifier 格式）
+#       victoryConditions: [...]
+#       rewardPoints: 數字
+#
+# Boss 機制也是 modifier：
+#   phases:
+#     - when: { hp_above: 0.5 }
+#       modifiers: [...]
+#       skills: [...]
+
+# ═══════════════════════════════════════
+# D 階副本（待設計）
+# ═══════════════════════════════════════
+
+d-trial-grounds:
+  name: 試煉場
+  rank: D
+  scenes:
+    - id: scene-1
+      title: 野外遭遇
+      enemies:
+        - archetype: bloodhound
+          count: 3
+      victoryConditions:
+        - kind: killAll
+          requirement: required
+      rewardPoints: 200
+
+    - id: scene-2
+      title: 戰士的挑戰
+      enemies:
+        - archetype: corrupted-warrior
+          count: 2
+        - archetype: bloodhound
+          count: 1
+          boss: true
+      victoryConditions:
+        - kind: killAll
+          requirement: required
+        - kind: survive
+          requirement: optional
+          seconds: 60
+          bonusPoints: 100
+      rewardPoints: 400
+
+# ═══════════════════════════════════════
+# Boss 機制範例
+# ═══════════════════════════════════════
+# 以下展示 Boss 定義的完整格式，供設計副本時參考
+
+_boss-template-example:
+  archetype: corrupted-warrior
+  boss: true
+  crushRate: 0.15
+  phases:
+    - name: phase-1
+      when: { hp_above: 0.5 }
+      modifiers:
+        - target: attackTable.crush
+          value: 0.15
+      skills: [heavy-slash, armor-break]
+
+    - name: phase-2
+      when: { hp_at_or_below: 0.5 }
+      modifiers:
+        - target: attackTable.crush
+          value: 0.25
+        - target: attack.interval
+          op: "×"
+          value: 0.7
+      skills: [heavy-slash, armor-break, charged-slash]
+      onPhaseEnter:
+        - effect: armor-grant
+          rank: B
+          duration: 8
+          amount: 20
+
+# ═══════════════════════════════════════
+# 場景規則範例
+# ═══════════════════════════════════════
+
+_scene-modifier-examples:
+  poison-swamp:
+    name: 毒霧沼澤
+    sceneModifiers:
+      - target: effect.poison.duration
+        op: "×"
+        value: 1.5
+        appliesTo: all
+
+  fire-arena:
+    name: 烈焰競技場
+    sceneModifiers:
+      - target: damage.more
+        value: 1.4
+        condition:
+          skillHasTag: fire
+        appliesTo: all

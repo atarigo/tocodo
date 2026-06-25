@@ -1,0 +1,77 @@
+# 防具與盾牌定義
+# 空身沒有防禦：護甲值全部來自裝備
+
+# ─── 防具 ───
+
+leather-armor:
+  name: 皮甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 6
+  price: 4000
+
+cloth-robe:
+  name: 布袍
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 3
+    - target: attribute.wil
+      op: "+"
+      value: 15
+  price: 4000
+
+chainmail:
+  name: 鎖子甲
+  rank: C
+  tags: [armor, body, heavy]
+  provides:
+    - target: defense.armor
+      value: 12
+    - target: attribute.agi
+      op: "+"
+      value: -10
+  price: 15000
+
+plate-armor:
+  name: 重板甲
+  rank: B
+  tags: [armor, body, heavy]
+  provides:
+    - target: defense.armor
+      value: 22
+    - target: defense.reductionRate
+      value: 0.08
+    - target: attribute.agi
+      op: "+"
+      value: -25
+  price: 50000
+
+# ─── 盾牌 ───
+
+round-shield:
+  name: 圓盾
+  rank: D
+  tags: [shield, offhand]
+  provides:
+    - target: defense.armor
+      value: 3
+    - target: attackTable.block
+      value: 0.30
+  price: 4000
+
+tower-shield:
+  name: 塔盾
+  rank: B
+  tags: [shield, offhand, heavy, dungeon_only]
+  provides:
+    - target: defense.armor
+      value: 6
+    - target: attackTable.block
+      value: 0.45
+    - target: attribute.agi
+      op: "+"
+      value: -15

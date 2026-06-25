@@ -1,0 +1,61 @@
+# 飾品定義
+
+power-ring:
+  name: 力量戒指
+  rank: D
+  tags: [accessory, ring]
+  provides:
+    - target: attribute.str
+      op: "+"
+      value: 15
+  price: 4000
+
+life-amulet:
+  name: 生命項鍊
+  rank: C
+  tags: [accessory, amulet]
+  provides:
+    - target: attribute.vit
+      op: "+"
+      value: 20
+  price: 15000
+
+gale-boots:
+  name: 疾風之靴
+  rank: C
+  tags: [accessory, feet]
+  provides:
+    - target: attribute.agi
+      op: "+"
+      value: 20
+  price: 15000
+
+marksman-goggles:
+  name: 精準護目鏡
+  rank: C
+  tags: [accessory, head]
+  provides:
+    - target: attribute.dex
+      op: "+"
+      value: 20
+  price: 15000
+
+meditation-pendant:
+  name: 冥想吊墜
+  rank: C
+  tags: [accessory, amulet]
+  provides:
+    - target: attribute.wil
+      op: "+"
+      value: 20
+  price: 15000
+
+lucky-coin:
+  name: 幸運硬幣
+  rank: C
+  tags: [accessory]
+  provides:
+    - target: attribute.luk
+      op: "+"
+      value: 20
+  price: 15000

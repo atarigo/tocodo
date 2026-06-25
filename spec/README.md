@@ -4,7 +4,67 @@
 
 ## 核心哲學
 
-引擎只提供共用公式與結算管線，每個技能、每把武器各自宣告吃哪些屬性、怎麼吃。職業是從機制長出來的，不是設計出來的。
+技能、武器、屬性三者分離，透過 **tag + modifier** 在運算時組合。引擎只認 tag 和 modifier，不知道任何具體技能或武器的名字。職業是從機制長出來的，不是設計出來的。
+
+## 四層架構
+
+```
+改的頻率        層                        內容
+─────────────────────────────────────────────────────
+每天改    Layer 4 ─ 內容定義 (Content)     技能、武器、敵人、副本（YAML）
+偶爾改    Layer 3 ─ 規則宣告 (Rules)       攻擊表、tag 對照、效果行為（也是資料）
+幾乎不改  Layer 2 ─ 管線引擎 (Pipeline)    收集 modifier → 排序 → 計算
+不改      Layer 1 ─ 基礎元件 (Primitives)  飽和曲線、擲骰、衍生值公式
+```
+
+遊戲調整只在上面兩層：改 YAML 裡的數值（Layer 4）或調規則表（Layer 3）。不碰程式碼。
+
+## 規格文件索引
+
+### Layer 1 — 基礎元件
+
+| 文件 | 內容 |
+|---|---|
+| [01-primitives.md](01-primitives.md) | 所有數學公式：飽和曲線、HP/MP、攻速、平衡擲骰、閃避/躲避/暴擊、意志折減、數值修飾統一規則、屬性升級定價、敵人縮放 |
+
+### Layer 2 — 管線引擎
+
+| 文件 | 內容 |
+|---|---|
+| [02-pipeline.md](02-pipeline.md) | 完整攻擊流程圖、非法術/法術傷害管線（8 步）、穿透與真傷、效果觸發管線（6 步）、modifier 收集與解析順序、攻速動態計算、角色組裝 |
+
+### Layer 3 — 規則宣告
+
+| 文件 | 內容 |
+|---|---|
+| [03-tags.md](03-tags.md) | Tag 分類法（行動/武器/元素/裝備/特殊）、技能—武器相容性、武器屬性規則、修飾條件語法 |
+| [04-attack-table.md](04-attack-table.md) | 單骰攻擊表各列的 tag 驅動規則、各技能類型的組表差異、冰凍/暈眩對攻擊表的影響 |
+| [05-effect-rules.md](05-effect-rules.md) | 效果三大類型、疊加規則、觸發條件（命中/破防/格檔）、狀態開關特殊行為、可修飾目標清單 |
+
+### Layer 4 — 內容定義
+
+| 文件 | 內容 |
+|---|---|
+| [content/skills.yaml](content/skills.yaml) | 全部技能定義（近戰/槍/法術），tag + modifier 格式 |
+| [content/weapons.yaml](content/weapons.yaml) | 全部武器定義，tag + provides 格式 |
+| [content/armor.yaml](content/armor.yaml) | 防具 + 盾牌定義 |
+| [content/accessories.yaml](content/accessories.yaml) | 飾品定義 |
+| [content/effects.yaml](content/effects.yaml) | 18 種效果定義（數值修飾/持續跳動/狀態開關） |
+| [content/enemies.yaml](content/enemies.yaml) | 敵人原型 + 縮放參數 |
+| [content/dungeons.yaml](content/dungeons.yaml) | 副本定義（場景、Boss 機制、勝利條件） |
+
+### 系統規則
+
+| 文件 | 內容 |
+|---|---|
+| [06-progression.md](06-progression.md) | 角色狀態、五階制、升階、經濟系統、商店定價、偉業系統、角色組裝、存檔 |
+| [07-balance.md](07-balance.md) | 數值平衡基準（TTK/TTS）— 待定案 |
+
+### 開發追蹤
+
+| 文件 | 內容 |
+|---|---|
+| [todo.md](todo.md) | 規格 vs 程式碼差異清單 + 實作 TODO |
 
 ## 核心循環
 
@@ -12,25 +72,11 @@
 
 死亡不繼承任何東西——那是另一個人生。
 
-## 規格文件索引
+## 閱讀順序
 
-| 文件 | 內容 | 狀態 |
-|---|---|---|
-| [attributes.md](attributes.md) | 六主屬性、衍生值、屬性升級定價 | ✅ 已定案 |
-| [combat.md](combat.md) | 攻擊判定（單骰攻擊表）、傷害結算兩階段 | ✅ 已定案 |
-| [effects.md](effects.md) | Buff/Debuff 系統、效果名錄、優先度覆蓋 | ⚠️ 疊加規則待討論 |
-| [skills.md](skills.md) | 技能系統、技能傷害公式、內容資料 | ⚠️ 需逐一設計 |
-| [equipment.md](equipment.md) | 武器、裝備、裝備欄位、數值修飾統一規則 | ⚠️ 需逐一設計 |
-| [enemies.md](enemies.md) | 敵人原型、縮放、頭目機制 | ⚠️ 需配合平衡 |
-| [dungeon.md](dungeon.md) | 副本結構、場景、勝利條件、獎勵結算 | ✅ 已更新 |
-| [economy.md](economy.md) | 獎勵點、商店、屬性定價 | ✅ 已更新 |
-| [progression.md](progression.md) | 階級系統、升階、存檔、偉業系統 | ✅ 已更新 |
-| [balance.md](balance.md) | 數值平衡基準（TTK/TTS）、升階曲線 | ❌ 待定案 |
-
-## 待討論事項
-
-1. **效果疊加規則** — 不同來源的同名效果如何共存？（effects.md）
-2. **數值平衡基準** — TTK/TTS 目標值，決定所有數值的填入依據（balance.md）
-3. **技能個別設計** — 每個技能 5 階×11 等的數值變化需逐一定案
-4. **武器/裝備個別設計** — 每件 5 階×11 等的精煉數值需逐一定案
-5. **升階方式** — 技能用捲軸，武器/裝備的升階方式待定
+1. 先看本文件（架構總覽）
+2. 想理解「一次攻擊怎麼算」→ [02-pipeline.md](02-pipeline.md)
+3. 想理解「技能和武器怎麼配」→ [03-tags.md](03-tags.md)
+4. 想查公式 → [01-primitives.md](01-primitives.md)
+5. 想改數值 → `content/*.yaml`
+6. 想加新機制 → 先看 [03-tags.md](03-tags.md) 能不能用 tag 解決，不行再改 [02-pipeline.md](02-pipeline.md)

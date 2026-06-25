@@ -1,0 +1,261 @@
+# 技能定義
+# 規則見 02-pipeline.md（傷害管線）、03-tags.md（tag 相容性）
+# 公式見 01-primitives.md
+#
+# canBeParried/canBeBlocked 由 tag 在攻擊表規則中自動決定（見 04-attack-table.md）
+# canCrit 由各技能個別宣告（預設 false）
+
+# ═══════════════════════════════════════
+# 近戰技
+# ═══════════════════════════════════════
+
+heavy-slash:
+  name: 重斬
+  rank: D
+  tags: [melee, physical, attack]
+  action: strike
+  cooldown: 6
+  mpCost: 0
+  canCrit: true
+  modifiers:
+    - target: damage.mult
+      value: 1.8
+  price: 4000
+
+rend:
+  name: 撕裂
+  rank: D
+  tags: [melee, physical, attack]
+  action: strike
+  cooldown: 8
+  mpCost: 0
+  modifiers:
+    - target: damage.mult
+      value: 1.0
+  onHit:
+    - effect: bleed
+      rank: D
+      duration: 6
+      amount: 3
+  price: 4000
+
+armor-break:
+  name: 破甲擊
+  rank: C
+  tags: [melee, physical, attack]
+  action: strike
+  cooldown: 10
+  mpCost: 0
+  modifiers:
+    - target: damage.mult
+      value: 1.2
+  onHit:
+    - effect: armor-break
+      rank: C
+      duration: 8
+      amount: -8
+  price: 15000
+
+charged-slash:
+  name: 蓄力斬
+  rank: C
+  tags: [melee, physical, attack]
+  action: cast
+  castTime: 1.2
+  cooldown: 12
+  mpCost: 0
+  canCrit: true
+  modifiers:
+    - target: damage.mult
+      value: 3.0
+  price: 15000
+
+leech-slash:
+  name: 吸血斬
+  rank: C
+  tags: [melee, physical, attack]
+  action: strike
+  cooldown: 9
+  mpCost: 0
+  modifiers:
+    - target: damage.mult
+      value: 1.2
+  onHit:
+    - heal:
+        base: 5
+        scaling:
+          vit: 0.15
+  price: 15000
+
+# ═══════════════════════════════════════
+# 槍技（ranged + gun）
+# ═══════════════════════════════════════
+
+piercing-shot:
+  name: 穿甲射擊
+  rank: C
+  tags: [ranged, physical, attack]
+  action: strike
+  cooldown: 8
+  mpCost: 0
+  modifiers:
+    - target: damage.mult
+      value: 1.4
+  pierce: true
+  price: 15000
+
+venom-round:
+  name: 毒彈
+  rank: C
+  tags: [ranged, physical, attack, poison]
+  action: strike
+  cooldown: 9
+  mpCost: 0
+  modifiers:
+    - target: damage.mult
+      value: 0.8
+  pierce: true
+  onHit:
+    - effect: poison
+      rank: C
+      duration: 8
+      amount: 3
+  price: 15000
+
+concussion-round:
+  name: 震撼彈
+  rank: B
+  tags: [ranged, physical, attack, dungeon_only]
+  action: strike
+  cooldown: 14
+  mpCost: 0
+  modifiers:
+    - target: damage.mult
+      value: 0.6
+  onHit:
+    - effect: stun
+      rank: B
+      duration: 1.5
+
+# ═══════════════════════════════════════
+# 法術（不需特定武器、消耗精神）
+# ═══════════════════════════════════════
+
+fireball:
+  name: 火球術
+  rank: D
+  tags: [spell, fire, magical]
+  action: cast
+  castTime: 1.5
+  cooldown: 5
+  mpCost: 10
+  modifiers:
+    - target: damage.base
+      value: 16
+    - target: damage.scaling.wil
+      value: 0.3
+  onHit:
+    - effect: burn
+      rank: D
+      duration: 4
+      amount: 2
+  price: 4000
+
+ice-bolt:
+  name: 寒冰箭
+  rank: D
+  tags: [spell, ice, magical]
+  action: cast
+  castTime: 1.2
+  cooldown: 6
+  mpCost: 9
+  modifiers:
+    - target: damage.base
+      value: 12
+    - target: damage.scaling.wil
+      value: 0.25
+  onHit:
+    - effect: ice-slow
+      rank: D
+      duration: 5
+      amount: 0.30       # 攻速 -30%
+  price: 4000
+
+corrode-armor:
+  name: 蝕甲術
+  rank: C
+  tags: [spell, magical]
+  action: cast
+  castTime: 1.2
+  cooldown: 12
+  mpCost: 8
+  modifiers:
+    - target: damage.base
+      value: 4
+    - target: damage.scaling.wil
+      value: 0.1
+  onHit:
+    - effect: reduction-break
+      rank: C
+      duration: 15
+      amount: 0.30       # 減傷率 -30%
+  effectsIgnoreBreak: true
+  price: 15000
+
+flame-burst:
+  name: 烈焰爆發
+  rank: B
+  tags: [spell, fire, magical, dungeon_only]
+  action: cast
+  castTime: 2.5
+  cooldown: 12
+  mpCost: 22
+  modifiers:
+    - target: damage.base
+      value: 40
+    - target: damage.scaling.wil
+      value: 0.6
+  onHit:
+    - effect: burn
+      rank: B
+      duration: 6
+      amount: 4
+
+deep-freeze:
+  name: 冰封術
+  rank: B
+  tags: [spell, ice, magical, dungeon_only]
+  action: cast
+  castTime: 2.0
+  cooldown: 18
+  mpCost: 20
+  modifiers:
+    - target: damage.base
+      value: 10
+    - target: damage.scaling.wil
+      value: 0.2
+  onHit:
+    - effect: freeze
+      rank: B
+      duration: 4
+
+heal:
+  name: 治癒術
+  rank: C
+  tags: [spell, magical]
+  action: cast
+  castTime: 2.0
+  cooldown: 10
+  mpCost: 14
+  heal:
+    base: 20
+    scaling:
+      wil: 0.4
+  price: 15000
+
+# ═══════════════════════════════════════
+# 普攻規則
+# ═══════════════════════════════════════
+# 空手不是武器：沒有武器 = 沒有普攻
+# 普攻由武器自動提供，tags 繼承武器的 tags
+# 普攻等同 action: strike, damage.mult: 1.0, 無 onHit
