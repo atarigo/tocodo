@@ -101,7 +101,8 @@ piercing-shot:
   modifiers:
     - target: damage.mult
       value: 1.4
-  pierce: true
+    - target: attack.armorPenetration
+      value: 1.0
   price: 15000
 
 venom-round:
@@ -114,7 +115,8 @@ venom-round:
   modifiers:
     - target: damage.mult
       value: 0.8
-  pierce: true
+    - target: attack.armorPenetration
+      value: 1.0
   onHit:
     - effect: poison
       rank: C

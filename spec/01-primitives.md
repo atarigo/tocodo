@@ -148,22 +148,15 @@ DEX 透過飽和曲線放大平衡：
 
 ## 敵人屬性預算
 
-```
-budget = (40 + 16 × floor) × (boss ? 1.4 : 1)
-each_attr = 10 + round(budget × weight ÷ total_weights)
-```
-
-夾限於 0\~255。
-
----
-
-## 敵人武器生成
+敵人原型定義基礎屬性（由權重分配，落在 D 階範圍 0\~50）。進入副本時依副本階級等比放大：
 
 ```
-min_damage = round((3 + 1.6 × floor) × damageMult × (boss ? 1.15 : 1))
-max_damage = round((6 + 2.6 × floor) × damageMult × (boss ? 1.15 : 1))
-armor = round(floor × 0.8) + (boss ? 4 : 0)
+rank_multiplier = { D: 1, C: 2, B: 3, A: 4, S: 5 }
+variance = 0.8 + random() × 0.4        # 0.8~1.2 隨機微調
+each_attr = round(base_attr × rank_multiplier × variance)
 ```
+
+夾限於 0\~255。同一個敵人原型可在所有階級的副本出現，不需要每個階級各設計一套。
 
 ---
 

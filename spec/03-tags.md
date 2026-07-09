@@ -42,13 +42,14 @@
 | `weapon` | 武器 |
 | `armor` | 防具 |
 | `shield` | 盾牌 |
-| `accessory` | 飾品 |
-| `body` | 身體欄位 |
 | `head` | 頭部欄位 |
+| `neck` | 頸部欄位 |
+| `body` | 身體欄位 |
+| `ring` | 手飾欄位 |
+| `waist` | 腰部欄位 |
 | `legs` | 腿部欄位 |
 | `feet` | 足部欄位 |
-| `ring` | 戒指欄位 |
-| `amulet` | 項鍊欄位 |
+| `offhand` | 可裝備在副手（不代表只能副手） |
 
 ### 特殊標記
 
@@ -173,9 +174,9 @@ modifier:
 | 重板甲 | `armor`, `body`, `dungeon_only` |
 | 圓盾 | `shield` |
 | 塔盾 | `shield`, `dungeon_only` |
-| 力量戒指 | `accessory`, `ring` |
-| 生命項鍊 | `accessory`, `amulet` |
-| 疾風之靴 | `accessory`, `feet` |
-| 精準護目鏡 | `accessory`, `head` |
-| 冥想吊墜 | `accessory`, `amulet` |
-| 幸運硬幣 | `accessory` |
+| 力量戒指 | `ring` |
+| 生命項鍊 | `neck` |
+| 疾風之靴 | `armor`, `feet` |
+| 精準護目鏡 | `armor`, `head` |
+| 冥想吊墜 | `neck` |
+| 幸運硬幣 | `ring` |

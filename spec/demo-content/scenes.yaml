@@ -1,0 +1,53 @@
+# 場景定義
+# 場景是戰鬥的基本單位，副本由多個場景組成，不同副本可以共用同一個場景。
+# 場景獨立於副本存在，擁有自己的 ID。
+
+# ─── 場景欄位說明 ───
+#
+# name:              場景顯示名稱
+# enemies:           敵人組成
+#   - archetype:       原型 ID（對應 enemies.yaml 定義的原型）
+#     count:           數量
+#     boss:            是否為首領（啟用碾壓，使用原型的 bossName）
+#     crushRate:       自訂碾壓率（預設 0.15）
+# allies:            友方 NPC（不可控 AI）
+#   - archetype:       原型 ID
+#     count:           數量
+# neutrals:          中立 NPC（如商人、路人）
+#   - archetype:       原型 ID
+#     count:           數量
+# sceneModifiers:    場景規則（modifier 格式，影響場景內所有戰鬥）
+# victoryConditions: 勝利條件
+#   - kind:            條件類型（killAll / killCount / killTarget / survive / escort / interact）
+#     requirement:     必要性（required / optional / any-of）
+#     額外參數依 kind 而定（如 survive 需要 seconds，killCount 需要 count）
+# rewardPoints:      通關獎勵點數
+
+# ─── 場景定義 ───
+
+wild-encounter:
+  name: 野外遭遇
+  enemies:
+    - archetype: bloodhound
+      count: 3
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 200
+
+warrior-challenge:
+  name: 戰士的挑戰
+  enemies:
+    - archetype: corrupted-warrior
+      count: 2
+    - archetype: bloodhound
+      count: 1
+      boss: true
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+    - kind: survive
+      requirement: optional
+      seconds: 60
+      bonusPoints: 100
+  rewardPoints: 400

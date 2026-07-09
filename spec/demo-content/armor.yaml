@@ -1,4 +1,5 @@
-# 防具與盾牌定義
+# 非武器裝備定義（防具、盾牌、頸飾、手飾、腰帶）
+# 所有裝備統一按部位管理，走同一套 provides 格式
 # 空身沒有防禦：護甲值全部來自裝備
 
 # ─── 防具 ───
@@ -27,7 +28,7 @@ cloth-robe:
 chainmail:
   name: 鎖子甲
   rank: C
-  tags: [armor, body, heavy]
+  tags: [armor, body]
   provides:
     - target: defense.armor
       value: 12
@@ -39,7 +40,7 @@ chainmail:
 plate-armor:
   name: 重板甲
   rank: B
-  tags: [armor, body, heavy]
+  tags: [armor, body]
   provides:
     - target: defense.armor
       value: 22
@@ -66,7 +67,7 @@ round-shield:
 tower-shield:
   name: 塔盾
   rank: B
-  tags: [shield, offhand, heavy, dungeon_only]
+  tags: [shield, offhand, dungeon_only]
   provides:
     - target: defense.armor
       value: 6
@@ -75,3 +76,47 @@ tower-shield:
     - target: attribute.agi
       op: "+"
       value: -15
+
+# ─── 頸飾 ───
+
+life-amulet:
+  name: 生命項鍊
+  rank: C
+  tags: [neck]
+  provides:
+    - target: attribute.vit
+      op: "+"
+      value: 20
+  price: 15000
+
+meditation-pendant:
+  name: 冥想吊墜
+  rank: C
+  tags: [neck]
+  provides:
+    - target: attribute.wil
+      op: "+"
+      value: 20
+  price: 15000
+
+# ─── 手飾 ───
+
+power-ring:
+  name: 力量戒指
+  rank: D
+  tags: [ring]
+  provides:
+    - target: attribute.str
+      op: "+"
+      value: 15
+  price: 4000
+
+lucky-coin:
+  name: 幸運硬幣
+  rank: C
+  tags: [ring]
+  provides:
+    - target: attribute.luk
+      op: "+"
+      value: 20
+  price: 15000

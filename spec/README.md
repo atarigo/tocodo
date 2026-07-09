@@ -43,14 +43,17 @@
 
 ### Layer 4 — 內容定義
 
+`spec/content/*.yaml` 是格式範例，用來示範各類內容的欄位結構和資料格式。其中的數值（護甲值、傷害、冷卻時間等）都是假設值，不是定案。實際的遊戲資料定義在 `src/data/content/*.yaml`。只有公式類（如飽和曲線、衍生值計算）和定義類（如欄位名稱、型別、流程）的內容才是規格約束。
+
 | 文件 | 內容 |
 |---|---|
 | [content/skills.yaml](content/skills.yaml) | 全部技能定義（近戰/槍/法術），tag + modifier 格式 |
 | [content/weapons.yaml](content/weapons.yaml) | 全部武器定義，tag + provides 格式 |
-| [content/armor.yaml](content/armor.yaml) | 防具 + 盾牌定義 |
-| [content/accessories.yaml](content/accessories.yaml) | 飾品定義 |
+| [content/armor.yaml](content/armor.yaml) | 防具、盾牌、頸飾、手飾、腰帶等非武器裝備定義 |
 | [content/effects.yaml](content/effects.yaml) | 18 種效果定義（數值修飾/持續跳動/狀態開關） |
-| [content/enemies.yaml](content/enemies.yaml) | 敵人原型 + 縮放參數 |
+| [content/natural-equipment.yaml](content/natural-equipment.yaml) | 天生裝備定義（不可取得的武器與護甲） |
+| [content/enemies.yaml](content/enemies.yaml) | 敵人原型定義（戰鬥參數 + runtime 屬性） |
+| [content/scenes.yaml](content/scenes.yaml) | 場景定義（敵人組成、勝利條件，可被副本共用） |
 | [content/dungeons.yaml](content/dungeons.yaml) | 副本定義（場景、Boss 機制、勝利條件） |
 
 ### 系統規則

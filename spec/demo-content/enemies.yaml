@@ -1,0 +1,106 @@
+# 敵人原型定義
+# 屬性預算公式見 01-primitives.md
+# 首領標記由副本場景配置（見 content/dungeons.yaml）
+
+# ─── 原型欄位說明 ───
+#
+# name:        一般顯示名稱
+# bossName:    在場景中被標記為 boss 時使用的名稱
+# tags:        戰鬥行為標籤，告訴引擎這隻怪的攻擊類型（melee/ranged/physical/magical 等）
+# equipment:   裝備配置（引用裝備 ID），與主角、NPC 共用同一套結構
+# weights:     屬性點數分配比例（整數，由 loader 正規化）
+# skills:      這隻怪會使用的技能 ID 列表
+# items:       攜帶的消耗道具 ID 列表
+# speed:       移動速度（像素/秒），決定巡邏和追擊的快慢
+# alertRange:  偵測距離（像素），在此範圍內主動發現玩家
+# leashRange:  追擊極限（像素），超過就放棄追擊回到原位
+# radius:      碰撞圓半徑（像素），用在碰撞偵測和畫面顯示
+# color:       顯示顏色（十六進位），畫面上區分敵人
+
+# ─── 原型定義 ───
+
+bloodhound:
+  name: 嗜血獵犬
+  bossName: 血月狼王
+  tags: [melee, physical]
+  equipment:
+    mainHand: wolf-claw
+  weights:
+    str: 3
+    vit: 2
+    agi: 4
+    dex: 1
+    wil: 0
+    luk: 1
+  skills: [rend]
+  items: []
+  speed: 100
+  alertRange: 140
+  leashRange: 260
+  radius: 15
+  color: 0x8b4a3a
+
+corrupted-warrior:
+  name: 腐化戰士
+  bossName: 深淵領主
+  tags: [melee, physical]
+  equipment:
+    mainHand: corrupted-blade
+    body: corrupted-plate
+  weights:
+    str: 4
+    vit: 3
+    agi: 1
+    dex: 2
+    wil: 0
+    luk: 1
+  skills: [heavy-slash, armor-break]
+  items: []
+  speed: 72
+  alertRange: 150
+  leashRange: 280
+  radius: 17
+  color: 0x5a3a6b
+
+void-archer:
+  name: 虛空射手
+  bossName: 千瞳狙獵者
+  tags: [ranged, gun, physical]
+  equipment:
+    mainHand: void-gun
+    body: void-coat
+  weights:
+    str: 0
+    vit: 2
+    agi: 2
+    dex: 4
+    wil: 0
+    luk: 1
+  skills: [piercing-shot]
+  items: []
+  speed: 65
+  alertRange: 180
+  leashRange: 300
+  radius: 14
+  color: 0x3a5a8b
+
+fallen-sorcerer:
+  name: 墮落巫師
+  bossName: 焚世法皇
+  tags: [melee, staff, magical]
+  equipment:
+    mainHand: dark-staff
+  weights:
+    str: 0
+    vit: 2
+    agi: 1
+    dex: 3
+    wil: 4
+    luk: 1
+  skills: [fireball, ice-bolt]
+  items: []
+  speed: 60
+  alertRange: 160
+  leashRange: 270
+  radius: 15
+  color: 0x6b3a5a

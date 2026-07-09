@@ -9,6 +9,18 @@
 ## 角色狀態
 
 ```typescript
+type EquipmentSlot =
+  | 'head'      // 頭
+  | 'neck'      // 頸
+  | 'body'      // 甲
+  | 'mainHand'  // 主手
+  | 'offHand'   // 副手
+  | 'ring1'     // 手飾 1
+  | 'ring2'     // 手飾 2
+  | 'waist'     // 腰
+  | 'legs'      // 腿
+  | 'feet';     // 腳
+
 interface CharacterState {
   name: string;
   rank: Rank;                                // D/C/B/A/S
@@ -17,11 +29,12 @@ interface CharacterState {
   rewardPoints: number;                      // 獎勵點（唯一貨幣），起始 0
   inventory: string[];                       // 物品 ID
   knownSkills: SkillInstance[];              // 已習得技能（含等階與等級）
-  equippedWeapon: WeaponInstance | null;     // 主手武器
-  equippedGear: Record<GearSlot, GearInstance>;  // 裝備
+  equipment: Record<EquipmentSlot, string | null>;  // 裝備（所有部位統一管理）
   skillSlots: string[];                      // 技能欄（最多 5 格）
 }
 ```
+
+所有裝備（武器、防具、原本的飾品）統一按部位管理，走同一套 provides 格式、同一套公式和計算管道。不存在「飾品」這個獨立分類——項鍊是頸部裝備、戒指是手飾、護目鏡是頭部裝備、靴子是腳部裝備。
 
 ## 五階制
 
@@ -119,6 +132,17 @@ interface WorldEffects {
   遺產祝福: number;   // 獎勵點倍率（平時 1，觸發日 2）
 }
 ```
+
+## Entity 統一模型
+
+所有可戰鬥的實體（主角、敵人、NPC）共用同一套資料結構：屬性、裝備、技能、道具。攻防計算只有一條管線，不因對象類型而分流。
+
+裝備依取得方式分為兩類：
+
+- 一般裝備：有 `price` 欄位，可透過掉落、購買等方式取得
+- 天生裝備：無 `price` 欄位，不可取得、不可掉落（爪牙、毛皮等與生俱來的裝備）
+
+兩類在資料格式和計算公式上完全一致，差別只在取得方式。任何 entity 都能使用任何一類裝備，不設限制——獸型 NPC 用爪牙，人型敵人拿劍，全由設定檔決定。
 
 ## 角色組裝（養成 → 戰鬥單位）
 
