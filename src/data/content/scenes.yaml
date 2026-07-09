@@ -1,0 +1,132 @@
+# 場景定義
+# 場景是戰鬥的基本單位，可被不同副本共用
+# enemies/allies/neutrals 使用原型 ID（對應 enemies.yaml）
+
+# ═══════════════════════════════════════
+# 規格範例場景
+# ═══════════════════════════════════════
+
+wild-encounter:
+  name: 野外遭遇
+  enemies:
+    - archetype: bloodhound
+      count: 3
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 200
+
+warrior-challenge:
+  name: 戰士的挑戰
+  enemies:
+    - archetype: corrupted-warrior
+      count: 2
+    - archetype: bloodhound
+      count: 1
+      boss: true
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+    - kind: survive
+      requirement: optional
+      seconds: 60
+      bonusPoints: 100
+  rewardPoints: 400
+
+# ═══════════════════════════════════════
+# 既有場景
+# ═══════════════════════════════════════
+
+elite-werewolf:
+  name: 菁英狼人
+  enemies:
+    - archetype: elite-werewolf
+      count: 1
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 300
+
+vampire-brides:
+  name: 吸血鬼新娘三人組
+  enemies:
+    - archetype: vampire-bride
+      count: 3
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 400
+
+goblin-pack:
+  name: 哥布林群與哥布林王
+  enemies:
+    - archetype: goblin
+      count: 5
+    - archetype: goblin-king
+      count: 1
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 350
+
+ranged-squad:
+  name: 遠程三人小隊
+  enemies:
+    - archetype: bow-skirmisher
+      count: 1
+    - archetype: pistol-raider
+      count: 1
+    - archetype: rifle-marksman
+      count: 1
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 300
+
+goblin-raid:
+  name: 哥布林襲擊路人
+  enemies:
+    - archetype: goblin
+      count: 3
+  neutrals:
+    - archetype: civilian
+      count: 2
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 250
+
+vampire-lord:
+  name: 吸血鬼領主
+  enemies:
+    - archetype: vampire-lord
+      count: 1
+    - archetype: vampire-bride
+      count: 2
+  allies:
+    - archetype: vampire-hunter
+      count: 1
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 500
+
+werewolf-pack:
+  name: 狼人三人組
+  enemies:
+    - archetype: werewolf
+      count: 3
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 300
+
+werewolf-leader:
+  name: 狼人首領
+  enemies:
+    - archetype: werewolf-leader
+      count: 1
+  victoryConditions:
+    - kind: killAll
+      requirement: required
+  rewardPoints: 350

@@ -1,0 +1,328 @@
+# 敵人原型定義
+# 基礎屬性由 multiplier × weights 分配（落在 D 階 0~50 範圍）
+# 進入副本時依副本階級等比放大（D×1, C×2, B×3, A×4, S×5）
+# 裝備引用 equipment ID，防禦值由裝備算出
+
+archetypes:
+
+  # ═══════════════════════════════════════
+  # 規格原型
+  # ═══════════════════════════════════════
+
+  bloodhound:
+    name: 嗜血獵犬
+    bossName: 血月狼王
+    tags: [melee, physical]
+    multiplier: 1.0
+    weights: { str: 0.27, vit: 0.18, agi: 0.36, dex: 0.09, wil: 0, luk: 0.09 }
+    equipment:
+      mainHand: wolf-claw
+    skills: [rend]
+    speed: 100
+    alertRange: 140
+    leashRange: 260
+    radius: 15
+    color: 0x8b4a3a
+
+  corrupted-warrior:
+    name: 腐化戰士
+    bossName: 深淵領主
+    tags: [melee, physical]
+    multiplier: 1.0
+    weights: { str: 0.36, vit: 0.27, agi: 0.09, dex: 0.18, wil: 0, luk: 0.09 }
+    equipment:
+      mainHand: corrupted-blade
+      body: corrupted-plate
+    skills: [heavy-slash, armor-break]
+    speed: 72
+    alertRange: 150
+    leashRange: 280
+    radius: 17
+    color: 0x5a3a6b
+
+  void-archer:
+    name: 虛空射手
+    bossName: 千瞳狙獵者
+    tags: [ranged, gun, physical]
+    multiplier: 1.0
+    weights: { str: 0, vit: 0.22, agi: 0.22, dex: 0.44, wil: 0, luk: 0.11 }
+    equipment:
+      mainHand: void-gun
+      body: void-coat
+    skills: [piercing-shot]
+    speed: 65
+    alertRange: 180
+    leashRange: 300
+    preferredRange: 200
+    radius: 14
+    color: 0x3a5a8b
+
+  fallen-sorcerer:
+    name: 墮落巫師
+    bossName: 焚世法皇
+    tags: [melee, staff, magical]
+    multiplier: 1.0
+    weights: { str: 0, vit: 0.18, agi: 0.09, dex: 0.27, wil: 0.36, luk: 0.09 }
+    equipment:
+      mainHand: dark-staff
+    skills: [fireball, ice-bolt]
+    speed: 60
+    alertRange: 160
+    leashRange: 270
+    radius: 15
+    color: 0x6b3a5a
+
+  # ═══════════════════════════════════════
+  # 哥布林系
+  # ═══════════════════════════════════════
+
+  goblin:
+    name: 哥布林
+    tags: [melee, physical]
+    multiplier: 0.75
+    weights: { str: 0.18, vit: 0.18, agi: 0.24, dex: 0.18, wil: 0.08, luk: 0.14 }
+    equipment:
+      mainHand: dagger
+      body: goblin-leather
+    skills: []
+    speed: 92
+    alertRange: 127
+    leashRange: 240
+    radius: 14
+    color: 0x58a65c
+
+  goblin-king:
+    name: 哥布林王
+    tags: [melee, physical]
+    multiplier: 1.9
+    weights: { str: 0.28, vit: 0.32, agi: 0.12, dex: 0.12, wil: 0.06, luk: 0.1 }
+    equipment:
+      mainHand: iron-sword
+      body: goblin-king-plate
+    skills: []
+    speed: 76
+    alertRange: 160
+    leashRange: 280
+    radius: 19
+    color: 0x2f7f43
+
+  # ═══════════════════════════════════════
+  # 狼人系
+  # ═══════════════════════════════════════
+
+  werewolf:
+    name: 狼人
+    tags: [melee, physical]
+    multiplier: 1.0
+    weights: { str: 0.26, vit: 0.22, agi: 0.26, dex: 0.14, wil: 0.04, luk: 0.08 }
+    equipment:
+      mainHand: wolf-claw-main
+      offHand: wolf-claw-off
+      body: wolf-hide
+    skills: [charge, bite]
+    speed: 112
+    alertRange: 167
+    leashRange: 307
+    radius: 17
+    color: 0x8a8072
+
+  elite-werewolf:
+    name: 菁英狼人
+    tags: [melee, physical]
+    multiplier: 1.55
+    weights: { str: 0.3, vit: 0.25, agi: 0.25, dex: 0.12, wil: 0.03, luk: 0.05 }
+    equipment:
+      mainHand: elite-wolf-claw-main
+      offHand: elite-wolf-claw-off
+      body: elite-wolf-hide
+    skills: [charge, bite]
+    speed: 118
+    alertRange: 187
+    leashRange: 333
+    radius: 18
+    color: 0xa08765
+
+  werewolf-leader:
+    name: 狼人首領
+    tags: [melee, physical]
+    multiplier: 2.35
+    weights: { str: 0.32, vit: 0.32, agi: 0.18, dex: 0.1, wil: 0.03, luk: 0.05 }
+    equipment:
+      mainHand: alpha-claw-main
+      offHand: alpha-claw-off
+      body: alpha-hide
+    skills: [charge, bite]
+    speed: 104
+    alertRange: 200
+    leashRange: 360
+    radius: 21
+    color: 0x6f5d4d
+
+  # ═══════════════════════════════════════
+  # 吸血鬼系
+  # ═══════════════════════════════════════
+
+  vampire-bride:
+    name: 吸血鬼新娘
+    tags: [melee, physical]
+    multiplier: 1.25
+    weights: { str: 0.18, vit: 0.18, agi: 0.22, dex: 0.24, wil: 0.1, luk: 0.08 }
+    equipment:
+      mainHand: blood-claw-main
+      offHand: blood-claw-off
+      body: vampire-body
+    skills: []
+    speed: 96
+    alertRange: 167
+    leashRange: 307
+    radius: 15
+    color: 0xb55a78
+
+  vampire-lord:
+    name: 吸血鬼領主
+    tags: [melee, physical]
+    multiplier: 3.0
+    weights: { str: 0.24, vit: 0.26, agi: 0.18, dex: 0.18, wil: 0.1, luk: 0.04 }
+    equipment:
+      mainHand: noble-blood-fang
+      offHand: noble-blood-claw-off
+      body: ancient-vampire-body
+    skills: []
+    speed: 92
+    alertRange: 213
+    leashRange: 373
+    radius: 22
+    color: 0x9d244f
+
+  # ═══════════════════════════════════════
+  # 遠程系
+  # ═══════════════════════════════════════
+
+  bow-skirmisher:
+    name: 游擊弓手
+    tags: [ranged, physical]
+    multiplier: 0.9
+    weights: { str: 0.18, vit: 0.16, agi: 0.22, dex: 0.26, wil: 0.08, luk: 0.1 }
+    equipment:
+      mainHand: hunting-bow
+      body: light-armor
+    skills: []
+    speed: 70
+    alertRange: 173
+    leashRange: 287
+    preferredRange: 185
+    radius: 14
+    color: 0x7a9f4b
+
+  pistol-raider:
+    name: 手槍掠奪者
+    tags: [ranged, gun, physical]
+    multiplier: 0.95
+    weights: { str: 0.18, vit: 0.2, agi: 0.16, dex: 0.28, wil: 0.08, luk: 0.1 }
+    equipment:
+      mainHand: pistol
+      body: medium-armor
+    skills: []
+    speed: 76
+    alertRange: 173
+    leashRange: 287
+    preferredRange: 160
+    radius: 15
+    color: 0xc69a4e
+
+  rifle-marksman:
+    name: 步槍射手
+    tags: [ranged, gun, physical]
+    multiplier: 1.0
+    weights: { str: 0.14, vit: 0.18, agi: 0.12, dex: 0.34, wil: 0.12, luk: 0.1 }
+    equipment:
+      mainHand: rifle
+      body: medium-armor
+    skills: []
+    speed: 58
+    alertRange: 193
+    leashRange: 333
+    preferredRange: 230
+    radius: 15
+    color: 0x6c86b8
+
+  # ═══════════════════════════════════════
+  # 其他
+  # ═══════════════════════════════════════
+
+  civilian:
+    name: 路人 NPC
+    tags: [melee, physical]
+    multiplier: 0.25
+    weights: { str: 0.08, vit: 0.35, agi: 0.1, dex: 0.1, wil: 0.27, luk: 0.1 }
+    equipment:
+      mainHand: dagger
+    skills: []
+    speed: 58
+    alertRange: 0
+    leashRange: 200
+    radius: 13
+    color: 0xb8b2a5
+
+  vampire-hunter:
+    name: 吸血鬼獵人
+    tags: [ranged, gun, physical]
+    multiplier: 1.0
+    weights: { str: 0.24, vit: 0.2, agi: 0.2, dex: 0.24, wil: 0.06, luk: 0.06 }
+    equipment:
+      mainHand: pistol
+      offHand: revolver
+      body: hunter-coat
+    skills: []
+    speed: 86
+    alertRange: 193
+    leashRange: 333
+    preferredRange: 180
+    radius: 16
+    color: 0x4e86c6
+
+  red-scout:
+    name: 赤色斥候
+    tags: [melee, physical]
+    multiplier: 0.74
+    weights: { str: 0.18, vit: 0.18, agi: 0.18, dex: 0.18, wil: 0.14, luk: 0.14 }
+    equipment:
+      mainHand: iron-sword
+      body: scout-armor
+    skills: []
+    speed: 86
+    alertRange: 147
+    leashRange: 260
+    radius: 16
+    color: 0xe0564b
+
+  orange-guard:
+    name: 橙色守衛
+    tags: [melee, physical]
+    multiplier: 0.83
+    weights: { str: 0.22, vit: 0.24, agi: 0.12, dex: 0.16, wil: 0.16, luk: 0.10 }
+    equipment:
+      mainHand: greatsword
+      body: guard-plate
+    skills: []
+    speed: 78
+    alertRange: 140
+    leashRange: 267
+    radius: 16
+    color: 0xe0954b
+
+  purple-shooter:
+    name: 紫色射手
+    tags: [ranged, physical]
+    multiplier: 0.90
+    weights: { str: 0.13, vit: 0.13, agi: 0.19, dex: 0.22, wil: 0.19, luk: 0.14 }
+    equipment:
+      mainHand: hunting-bow
+      body: light-armor
+    skills: []
+    speed: 62
+    alertRange: 173
+    leashRange: 287
+    preferredRange: 170
+    radius: 14
+    color: 0xb04bd9

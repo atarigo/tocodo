@@ -1,0 +1,201 @@
+# 武器定義
+# 規則見 03-tags.md（tag 相容性）、04-attack-table.md（攻擊表）
+# 公式見 01-primitives.md（平衡擲骰、攻速）
+
+iron-sword:
+  name: 鐵劍
+  rank: D
+  tags: [weapon, melee, sword, physical]
+  provides:
+    - target: damage.base.min
+      value: 8
+    - target: damage.base.max
+      value: 14
+    - target: damage.balance
+      value: 0.45
+    - target: attack.interval
+      value: 1.8
+    - target: attackTable.parry
+      value: 0.10
+  price: 4000
+
+dagger:
+  name: 短刀
+  rank: D
+  tags: [weapon, melee, dagger, physical]
+  provides:
+    - target: damage.base.min
+      value: 5
+    - target: damage.base.max
+      value: 9
+    - target: damage.balance
+      value: 0.55
+    - target: attack.interval
+      value: 1.1
+    - target: attackTable.parry
+      value: 0.20
+  price: 4000
+
+greatsword:
+  name: 巨劍
+  rank: D
+  tags: [weapon, melee, greatsword, physical, two_handed]
+  provides:
+    - target: damage.base.min
+      value: 16
+    - target: damage.base.max
+      value: 34
+    - target: damage.balance
+      value: 0.35
+    - target: attack.interval
+      value: 2.8
+    - target: attackTable.parry
+      value: 0.05
+  price: 4000
+
+spear:
+  name: 長槍
+  rank: D
+  tags: [weapon, melee, physical, two_handed]
+  provides:
+    - target: damage.base.min
+      value: 10
+    - target: damage.base.max
+      value: 18
+    - target: damage.balance
+      value: 0.42
+    - target: attack.interval
+      value: 2.1
+    - target: attackTable.parry
+      value: 0.08
+  price: 4000
+
+hunting-bow:
+  name: 獵弓
+  rank: D
+  tags: [weapon, ranged, bow, physical, two_handed]
+  provides:
+    - target: damage.base.min
+      value: 9
+    - target: damage.base.max
+      value: 19
+    - target: damage.balance
+      value: 0.40
+    - target: attack.interval
+      value: 2.0
+    - target: attackTable.parry
+      value: 0.05
+  price: 4000
+
+pistol:
+  name: 手槍
+  rank: D
+  tags: [weapon, ranged, gun, physical]
+  provides:
+    - target: damage.base.min
+      value: 12
+    - target: damage.base.max
+      value: 16
+    - target: damage.balance
+      value: 0.60
+    - target: attack.interval
+      value: 1.3
+    - target: attackTable.parry
+      value: 0.05
+  price: 4000
+
+revolver:
+  name: 重型左輪
+  rank: D
+  tags: [weapon, ranged, gun, physical]
+  provides:
+    - target: damage.base.min
+      value: 15
+    - target: damage.base.max
+      value: 21
+    - target: damage.balance
+      value: 0.60
+    - target: attack.interval
+      value: 1.85
+    - target: attackTable.parry
+      value: 0
+  price: 4000
+
+offhand-dagger:
+  name: 副手短刀
+  rank: D
+  tags: [weapon, melee, dagger, physical]
+  provides:
+    - target: damage.base.min
+      value: 4
+    - target: damage.base.max
+      value: 8
+    - target: damage.balance
+      value: 0.55
+    - target: attack.interval
+      value: 0.9
+    - target: attackTable.parry
+      value: 0.08
+  price: 4000
+
+apprentice-staff:
+  name: 學徒法杖
+  rank: D
+  tags: [weapon, melee, staff, magical]
+  provides:
+    - target: damage.base.min
+      value: 4
+    - target: damage.base.max
+      value: 8
+    - target: damage.balance
+      value: 0.40
+    - target: attack.interval
+      value: 2.0
+    - target: attackTable.parry
+      value: 0.08
+    - target: cast.time
+      op: "×"
+      value: 0.85
+    - target: skill.mpCost
+      op: "×"
+      value: 0.90
+  price: 4000
+
+sage-staff:
+  name: 賢者法杖
+  rank: B
+  tags: [weapon, melee, staff, magical]
+  provides:
+    - target: damage.base.min
+      value: 5
+    - target: damage.base.max
+      value: 10
+    - target: damage.balance
+      value: 0.50
+    - target: attack.interval
+      value: 2.2
+    - target: attackTable.parry
+      value: 0.08
+    - target: cast.time
+      op: "×"
+      value: 0.70
+    - target: skill.mpCost
+      op: "×"
+      value: 0.80
+
+rifle:
+  name: 步槍
+  rank: D
+  tags: [weapon, ranged, gun, physical, two_handed]
+  provides:
+    - target: damage.base.min
+      value: 24
+    - target: damage.base.max
+      value: 32
+    - target: damage.balance
+      value: 0.65
+    - target: attack.interval
+      value: 2.2
+    - target: attackTable.parry
+      value: 0.05
+  price: 4000

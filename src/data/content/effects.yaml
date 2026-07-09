@@ -1,0 +1,154 @@
+# 效果名錄
+# 規則見 05-effect-rules.md
+# 三大類型：modifier（數值修飾）、dot/hot（持續跳動）、toggle（狀態開關）
+
+# ─── 數值修飾型 ───
+
+armor-break:
+  name: 破甲
+  type: modifier
+  target: defense.armor
+  unit: flat
+  direction: debuff
+  stackLimit: 0
+
+armor-grant:
+  name: 佑甲
+  type: modifier
+  target: defense.armor
+  unit: flat
+  direction: buff
+  stackLimit: 0
+
+reduction-break:
+  name: 蝕甲
+  type: modifier
+  target: defense.reductionRate
+  unit: ratio
+  direction: debuff
+  stackLimit: 0
+
+reduction-grant:
+  name: 耀甲
+  type: modifier
+  target: defense.reductionRate
+  unit: ratio
+  direction: buff
+  stackLimit: 0
+
+cast-slow:
+  name: 恍神
+  type: modifier
+  target: cast.speed
+  unit: ratio
+  direction: debuff
+  stackLimit: 0
+
+cast-haste:
+  name: 專注
+  type: modifier
+  target: cast.speed
+  unit: ratio
+  direction: buff
+  stackLimit: 0
+
+attack-slow:
+  name: 減速
+  type: modifier
+  target: attack.speed
+  unit: ratio
+  direction: debuff
+  stackLimit: 0
+
+attack-haste:
+  name: 加速
+  type: modifier
+  target: attack.speed
+  unit: ratio
+  direction: buff
+  stackLimit: 0
+
+ice-slow:
+  name: 冰緩
+  type: modifier
+  target: attack.speed
+  unit: ratio
+  direction: debuff
+  stackLimit: 0
+
+# ─── 持續跳動型 ───
+
+bleed:
+  name: 出血
+  type: dot
+  unit: flat
+  direction: debuff
+
+bleed-ratio:
+  name: 流血
+  type: dot
+  unit: ratio
+  direction: debuff
+
+poison:
+  name: 中毒
+  type: dot
+  unit: flat
+  direction: debuff
+
+poison-ratio:
+  name: 劇毒
+  type: dot
+  unit: ratio
+  direction: debuff
+
+burn:
+  name: 燃燒
+  type: dot
+  unit: flat
+  direction: debuff
+
+regen:
+  name: 恢復
+  type: hot
+  unit: flat
+  direction: buff
+
+healing:
+  name: 治療
+  type: hot
+  unit: ratio
+  direction: buff
+
+# ─── 狀態開關型 ───
+
+freeze:
+  name: 冰凍
+  type: toggle
+  direction: debuff
+  behavior:
+    disableActions: true
+    disableDodge: true
+    disableParry: true
+    disableBlock: true
+    interruptCast: true
+    breakThreshold: 0.2
+
+stun:
+  name: 暈眩
+  type: toggle
+  direction: debuff
+  behavior:
+    disableActions: true
+    disableDodge: true
+    disableParry: true
+    disableBlock: true
+    interruptCast: true
+    breakThreshold: 0.2
+
+silence:
+  name: 沉默
+  type: toggle
+  direction: debuff
+  behavior:
+    disableSkills: true

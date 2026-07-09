@@ -1,0 +1,380 @@
+# 天生裝備定義
+# 不可取得、不可掉落（無 price 欄位）
+# 所有 entity 皆可使用，由設定檔決定
+
+# ─── 天生武器 ───
+
+wolf-claw-main:
+  name: 狼爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 7
+    - target: damage.base.max
+      value: 13
+    - target: damage.balance
+      value: 0.50
+    - target: attack.interval
+      value: 1.05
+    - target: attackTable.parry
+      value: 0.05
+
+wolf-claw-off:
+  name: 副狼爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 5
+    - target: damage.base.max
+      value: 10
+    - target: damage.balance
+      value: 0.52
+    - target: attack.interval
+      value: 1.0
+    - target: attackTable.parry
+      value: 0.04
+
+elite-wolf-claw-main:
+  name: 精銳狼爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 11
+    - target: damage.base.max
+      value: 18
+    - target: damage.balance
+      value: 0.52
+    - target: attack.interval
+      value: 1.1
+    - target: attackTable.parry
+      value: 0.07
+
+elite-wolf-claw-off:
+  name: 副精銳狼爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 8
+    - target: damage.base.max
+      value: 14
+    - target: damage.balance
+      value: 0.53
+    - target: attack.interval
+      value: 1.05
+    - target: attackTable.parry
+      value: 0.06
+
+alpha-claw-main:
+  name: 首領巨爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 18
+    - target: damage.base.max
+      value: 30
+    - target: damage.balance
+      value: 0.48
+    - target: attack.interval
+      value: 1.45
+    - target: attackTable.parry
+      value: 0.08
+
+alpha-claw-off:
+  name: 副首領巨爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 14
+    - target: damage.base.max
+      value: 24
+    - target: damage.balance
+      value: 0.50
+    - target: attack.interval
+      value: 1.25
+    - target: attackTable.parry
+      value: 0.07
+
+blood-claw-main:
+  name: 血爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 8
+    - target: damage.base.max
+      value: 15
+    - target: damage.balance
+      value: 0.58
+    - target: attack.interval
+      value: 0.95
+    - target: attackTable.parry
+      value: 0.08
+
+blood-claw-off:
+  name: 副血爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 6
+    - target: damage.base.max
+      value: 12
+    - target: damage.balance
+      value: 0.58
+    - target: attack.interval
+      value: 0.90
+    - target: attackTable.parry
+      value: 0.07
+
+noble-blood-fang:
+  name: 貴族血牙
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 20
+    - target: damage.base.max
+      value: 34
+    - target: damage.balance
+      value: 0.56
+    - target: attack.interval
+      value: 1.60
+    - target: attackTable.parry
+      value: 0.06
+
+noble-blood-claw-off:
+  name: 副貴族血爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 12
+    - target: damage.base.max
+      value: 22
+    - target: damage.balance
+      value: 0.56
+    - target: attack.interval
+      value: 1.15
+    - target: attackTable.parry
+      value: 0.07
+
+# ─── 規格原型用天生武器 ───
+
+wolf-claw:
+  name: 狼爪
+  rank: D
+  tags: [weapon, melee, physical]
+  provides:
+    - target: damage.base.min
+      value: 5
+    - target: damage.base.max
+      value: 10
+    - target: damage.balance
+      value: 0.50
+    - target: attack.interval
+      value: 1.3
+    - target: attackTable.parry
+      value: 0.03
+
+corrupted-blade:
+  name: 腐化巨劍
+  rank: D
+  tags: [weapon, melee, physical, two_handed]
+  provides:
+    - target: damage.base.min
+      value: 14
+    - target: damage.base.max
+      value: 28
+    - target: damage.balance
+      value: 0.40
+    - target: attack.interval
+      value: 2.4
+    - target: attackTable.parry
+      value: 0.08
+
+void-gun:
+  name: 虛空槍
+  rank: D
+  tags: [weapon, ranged, gun, physical, two_handed]
+  provides:
+    - target: damage.base.min
+      value: 11
+    - target: damage.base.max
+      value: 19
+    - target: damage.balance
+      value: 0.60
+    - target: attack.interval
+      value: 1.9
+    - target: attackTable.parry
+      value: 0
+
+dark-staff:
+  name: 闇法杖
+  rank: D
+  tags: [weapon, melee, staff, magical, two_handed]
+  provides:
+    - target: damage.base.min
+      value: 4
+    - target: damage.base.max
+      value: 8
+    - target: damage.balance
+      value: 0.45
+    - target: attack.interval
+      value: 2.2
+    - target: attackTable.parry
+      value: 0.05
+    - target: cast.time
+      op: "×"
+      value: 0.85
+
+# ─── 天生護甲 ───
+
+wolf-hide:
+  name: 厚毛皮
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 1
+    - target: defense.reductionRate
+      value: 0.02
+
+elite-wolf-hide:
+  name: 精銳厚毛皮
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 2
+    - target: defense.reductionRate
+      value: 0.04
+
+alpha-hide:
+  name: 首領厚毛皮
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 3
+    - target: defense.reductionRate
+      value: 0.06
+
+vampire-body:
+  name: 吸血鬼體質
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 1
+    - target: defense.reductionRate
+      value: 0.03
+
+ancient-vampire-body:
+  name: 古老吸血鬼體質
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 3
+    - target: defense.reductionRate
+      value: 0.08
+
+corrupted-plate:
+  name: 腐化甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 8
+    - target: defense.reductionRate
+      value: 0.06
+
+void-coat:
+  name: 虛空外衣
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 3
+    - target: defense.reductionRate
+      value: 0.02
+
+goblin-leather:
+  name: 哥布林皮甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 4
+    - target: defense.reductionRate
+      value: 0.04
+
+goblin-king-plate:
+  name: 哥布林王甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 14
+    - target: defense.reductionRate
+      value: 0.15
+    - target: attackTable.block
+      value: 0.25
+
+light-armor:
+  name: 輕甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 5
+    - target: defense.reductionRate
+      value: 0.04
+
+medium-armor:
+  name: 中甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 5
+    - target: defense.reductionRate
+      value: 0.05
+
+hunter-coat:
+  name: 獵人外套
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 6
+    - target: defense.reductionRate
+      value: 0.06
+
+scout-armor:
+  name: 斥候甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 6
+    - target: defense.reductionRate
+      value: 0.04
+    - target: attackTable.block
+      value: 0.25
+
+guard-plate:
+  name: 守衛重甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 13
+    - target: defense.reductionRate
+      value: 0.13

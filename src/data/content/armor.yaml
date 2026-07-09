@@ -1,0 +1,166 @@
+# 非武器裝備定義（防具、盾牌、頸飾、手飾、腰帶）
+# 所有裝備統一按部位管理，走同一套 provides 格式
+# 空身沒有防禦：護甲值全部來自裝備
+
+# ─── 盾牌 ───
+
+wooden-shield:
+  name: 木盾
+  rank: D
+  tags: [shield, offhand]
+  provides:
+    - target: defense.armor
+      value: 1
+    - target: attackTable.block
+      value: 0.25
+  price: 4000
+
+# ─── 防具 ───
+
+leather-cap:
+  name: 皮帽
+  rank: D
+  tags: [armor, head]
+  provides:
+    - target: defense.armor
+      value: 1
+  price: 4000
+
+leather-armor:
+  name: 皮甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 2
+    - target: defense.reductionRate
+      value: 0.03
+  price: 4000
+
+leather-pants:
+  name: 皮褲
+  rank: D
+  tags: [armor, legs]
+  provides:
+    - target: defense.armor
+      value: 1
+    - target: defense.reductionRate
+      value: 0.01
+  price: 4000
+
+leather-boots:
+  name: 皮靴
+  rank: D
+  tags: [armor, feet]
+  provides:
+    - target: defense.armor
+      value: 1
+  price: 4000
+
+iron-helm:
+  name: 鐵盔
+  rank: D
+  tags: [armor, head]
+  provides:
+    - target: defense.armor
+      value: 2
+    - target: defense.reductionRate
+      value: 0.01
+  price: 4000
+
+iron-armor:
+  name: 鐵甲
+  rank: D
+  tags: [armor, body]
+  provides:
+    - target: defense.armor
+      value: 5
+    - target: defense.reductionRate
+      value: 0.08
+  price: 4000
+
+iron-greaves:
+  name: 鐵腿甲
+  rank: D
+  tags: [armor, legs]
+  provides:
+    - target: defense.armor
+      value: 3
+    - target: defense.reductionRate
+      value: 0.03
+  price: 4000
+
+iron-boots:
+  name: 鐵靴
+  rank: D
+  tags: [armor, feet]
+  provides:
+    - target: defense.armor
+      value: 2
+    - target: defense.reductionRate
+      value: 0.01
+  price: 4000
+
+# ─── 頸飾 ───
+
+life-amulet:
+  name: 生命項鍊
+  rank: C
+  tags: [neck]
+  provides:
+    - target: attribute.vit
+      op: "+"
+      value: 20
+  price: 15000
+
+meditation-pendant:
+  name: 冥想吊墜
+  rank: C
+  tags: [neck]
+  provides:
+    - target: attribute.wil
+      op: "+"
+      value: 20
+  price: 15000
+
+# ─── 手飾 ───
+
+power-ring:
+  name: 力量戒指
+  rank: D
+  tags: [ring]
+  provides:
+    - target: attribute.str
+      op: "+"
+      value: 15
+  price: 4000
+
+lucky-coin:
+  name: 幸運硬幣
+  rank: C
+  tags: [ring]
+  provides:
+    - target: attribute.luk
+      op: "+"
+      value: 20
+  price: 15000
+
+gale-boots:
+  name: 疾風之靴
+  rank: C
+  tags: [armor, feet]
+  provides:
+    - target: attribute.agi
+      op: "+"
+      value: 20
+  price: 15000
+
+marksman-goggles:
+  name: 精準護目鏡
+  rank: C
+  tags: [armor, head]
+  provides:
+    - target: attribute.dex
+      op: "+"
+      value: 20
+  price: 15000
