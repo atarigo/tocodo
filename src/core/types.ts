@@ -6,7 +6,6 @@ export interface Vec2 {
 export type CombatantKind = 'player' | 'meleeEnemy' | 'rangedEnemy';
 export type CombatFaction = 'player' | 'enemy' | 'ally' | 'neutral';
 export type AiState = 'guard' | 'patrol' | 'combat' | 'returning';
-export type WeaponKind = '近戰' | '槍' | '弓' | '法杖';
 export type AttackMode = 'melee' | 'projectile';
 export type AmmoType = 'arrow' | 'bullet';
 export type Rank = 'D' | 'C' | 'B' | 'A' | 'S';
@@ -28,29 +27,19 @@ export const RANK_BASE_PRICE: Record<Rank, number> = {
   A: 150_000,
   S: 550_000,
 };
-export type SkillId = 'charge' | 'bite' | 'heal';
-export type ItemId = 'smallHealthPotion';
-export type StatusId =
-  | 'bleed' | 'bleedPercent' | 'poison' | 'poisonPercent' | 'burn'
-  | 'regen' | 'healing'
-  | 'armorBreak' | 'armorBuff'
-  | 'reductionBreak' | 'reductionBuff'
-  | 'castSlow' | 'castHaste'
-  | 'attackSlow' | 'attackHaste' | 'iceSlow'
-  | 'freeze' | 'stun' | 'silence';
+export type SkillId = string;
+export type StatusId = string;
 export type StatusKind = 'buff' | 'debuff';
 
-export type EquipmentSlot = 'mainHand' | 'offHand' | 'head' | 'body' | 'legs' | 'feet';
+export type EquipmentSlot = 'head' | 'neck' | 'body' | 'mainHand' | 'offHand' | 'ring1' | 'ring2' | 'waist' | 'legs' | 'feet';
 export type EquipmentLoadout = Record<EquipmentSlot, string | null>;
 export interface ActionLoadout {
   skillSlots: (SkillId | null)[];
-  itemSlots: (ItemId | null)[];
 }
 
 export interface ActionBarState {
   skillCooldowns: number[];
   skillFailureReasons: (SkillFailureReason | null)[];
-  itemUsed: boolean[];
 }
 
 export interface CombatStageSnapshot {
@@ -114,13 +103,17 @@ export interface Combatant {
   skills: SkillId[];
   skillSlots: (SkillId | null)[];
   skillCooldowns: Partial<Record<SkillId, number>>;
-  itemSlots: (ItemId | null)[];
-  itemUsed: boolean[];
   aiState: AiState;
   defaultAiState: AiState;
   alertRange: number;
   leashRange: number;
   retaliationTargetId?: number;
+  casting?: {
+    skillId: string;
+    targetId: number;
+    remaining: number;
+    totalTime: number;
+  };
 }
 
 export type CombatHandSide = 'main' | 'off';
@@ -137,20 +130,19 @@ export interface WeaponDefinition {
   name: string;
   rank: Rank;
   price?: number;
+  tags: string[];
   slot: 'mainHand' | 'offHand';
   twoHanded: boolean;
-  kind: WeaponKind;
   attackMode: AttackMode;
   damage: [number, number];
   balance: number;
   interval: number;
   range: number;
   arc: number;
-  strApplies: boolean;
-  agiApplies: boolean;
-  dexAmp: boolean;
   parryRate: number;
   blockRate?: number;
+  castTimeMult?: number;
+  mpCostMult?: number;
   projectile?: {
     ammoType: AmmoType;
     shotsPerAttack: number;
@@ -168,6 +160,11 @@ export interface AmmoDefinition {
   quantity: number;
 }
 
+export interface AttrModifier {
+  attr: keyof Attributes;
+  value: number;
+}
+
 export interface GearDefinition {
   id: string;
   name: string;
@@ -178,6 +175,7 @@ export interface GearDefinition {
   reductionRate: number;
   parryRate: number;
   blockRate: number;
+  attrModifiers?: AttrModifier[];
 }
 
 export type EquipmentDefinition = WeaponDefinition | GearDefinition;
@@ -274,6 +272,16 @@ export interface DamageText {
   color?: number;
 }
 
+export interface ToggleBehavior {
+  disableActions?: boolean;
+  disableDodge?: boolean;
+  disableParry?: boolean;
+  disableBlock?: boolean;
+  disableSkills?: boolean;
+  interruptCast?: boolean;
+  breakThreshold?: number;
+}
+
 export interface StatusEffect {
   id: number;
   statusId: StatusId;
@@ -284,10 +292,12 @@ export interface StatusEffect {
   targetId: number;
   stacks: number;
   amountPerTick: number;
-  effectType: 'dot' | 'hot' | 'modifier' | 'toggle';
+  type: 'dot' | 'hot' | 'modifier' | 'toggle';
   remaining: number;
   tickInterval: number;
   tickTimer: number;
+  breakPool?: number;
+  behavior?: ToggleBehavior;
 }
 
 export type CombatSide = CombatFaction;

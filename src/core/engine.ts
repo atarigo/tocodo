@@ -1,23 +1,30 @@
 import Matter from 'matter-js';
-import { getDefaultAmmo } from '../data/ammoCatalog.js';
-import { buildAttackTable, resolveDamage, rollOutcome, type AttackOutcome } from './attackTable.js';
+// ammo removed — projectile defaults derived from weapon tags
+import { buildAttackTable, rollOutcome, type AttackOutcome } from './attackTable.js';
+import { calculateDamage } from './damagePipeline.js';
+import type { Modifier } from './modifiers.js';
+import { statusEffectsToModifiers } from './statusModifiers.js';
+import { weaponToModifiers, skillToModifiers } from './modifierAdapters.js';
 import { createDefaultBattleSetup } from './battleSetup.js';
 import { enemyById } from '../data/enemyCatalog.js';
-import { equipmentDefense, getOffhandWeapon, getWeapon, normalizeLoadout } from '../data/equipmentCatalog.js';
-import { attackInterval, balanceRoll, debuffDuration, effectiveBalance, maxHp, maxMp } from './formulas.js';
-import { itemById } from '../data/itemCatalog.js';
+import { applyEquipmentAttrModifiers, equipmentDefense, getOffhandWeapon, getWeapon, normalizeLoadout } from '../data/equipmentCatalog.js';
+import { attackInterval, debuffDuration, maxHp, maxMp } from './formulas.js';
+// items removed — not in spec
 import { createRng, type Rng } from './rng.js';
-import { skillById, type SkillDefinition } from '../data/skillCatalog.js';
+import { skillById } from '../data/skillCatalog.js';
+import type { SkillDefinition } from '../data/skillsLoader.js';
+import { isCompatible } from './tags.js';
 import { statusById } from '../data/statusCatalog.js';
-import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, EquipmentLoadout, Impact, InputState, ItemId, Projectile, Rank, SkillFailureReason, SkillId, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
+import { weaponAttrRules } from './tags.js';
+import type { BossPhaseDef, BossPhaseState } from './bossPhases.js';
+import { createBossPhaseState, checkPhaseTransition, applyPhaseTransition } from './bossPhases.js';
+import type { AiState, ArenaObstacle, Attributes, BattleResult, BattleSetup, CombatActorRef, CombatEvent, CombatFaction, CombatHand, CombatHandSide, Combatant, DamageText, EnemyDefinition, EnemySpawn, EquipmentLoadout, Impact, InputState, Projectile, Rank, SkillFailureReason, StatusEffect, Strike, Vec2, WeaponDefinition } from './types.js';
 import { ARENA_HEIGHT, ARENA_WIDTH } from './types.js';
 
 const WALL_THICKNESS = 64;
 const PLAYER_ID = 1;
 const MATTER_TICKS_PER_SECOND = 60;
 const BASE_ATTACK_INTERVAL = 0.82;
-const BASIC_DAMAGE: [number, number] = [4, 8];
-const BASIC_BALANCE = 0.55;
 const BASIC_RANGE = 88;
 const BASIC_ARC = Math.PI / 2;
 const DEFAULT_ALERT_RANGE = 230;
@@ -131,8 +138,9 @@ function makeEnemy(
   faction: CombatFaction,
   attrsOverride?: Attributes,
 ): Combatant {
-  const attrs = cloneAttrs(attrsOverride ?? spawn.attrs ?? definition.attrs);
+  const baseAttrs = cloneAttrs(attrsOverride ?? spawn.attrs ?? definition.attrs);
   const loadout = normalizeLoadout(definition.loadout);
+  const attrs = applyEquipmentAttrModifiers(baseAttrs, loadout);
   const hands = handsFromLoadout(loadout, attrs);
   const defense = equipmentDefense(loadout);
   return makeCombatant({
@@ -156,8 +164,6 @@ function makeEnemy(
     skills: definition.skills ?? [],
     skillSlots: definition.skills ?? [],
     skillCooldowns: {},
-    itemSlots: [],
-    itemUsed: [],
     aiState: spawn.aiState ?? definition.aiState ?? 'guard',
     defaultAiState: spawn.aiState ?? definition.aiState ?? 'guard',
     alertRange: spawn.alertRange ?? definition.alertRange ?? DEFAULT_ALERT_RANGE,
@@ -173,7 +179,7 @@ function handsFromLoadout(loadout: Parameters<typeof normalizeLoadout>[0], attrs
       side: 'main',
       weapon: mainWeapon,
       cooldown: 0,
-      interval: attackInterval(mainWeapon.interval, attrs.agi, mainWeapon.agiApplies),
+      interval: attackInterval(mainWeapon.interval, attrs.agi, weaponAttrRules(mainWeapon.tags).agiApplies),
     },
   ];
   const offhandWeapon = getOffhandWeapon(normalized);
@@ -182,21 +188,10 @@ function handsFromLoadout(loadout: Parameters<typeof normalizeLoadout>[0], attrs
       side: 'off',
       weapon: offhandWeapon,
       cooldown: 0,
-      interval: attackInterval(offhandWeapon.interval, attrs.agi, offhandWeapon.agiApplies),
+      interval: attackInterval(offhandWeapon.interval, attrs.agi, weaponAttrRules(offhandWeapon.tags).agiApplies),
     });
   }
   return hands;
-}
-
-function baseDamageWithWeapon(attacker: Combatant, rng: Rng, weapon?: WeaponDefinition): number {
-  if (!weapon) {
-    const balance = effectiveBalance(BASIC_BALANCE, attacker.attrs.dex);
-    return balanceRoll(rng, BASIC_DAMAGE[0], BASIC_DAMAGE[1], balance) + attacker.attrs.str;
-  }
-
-  const balance = effectiveBalance(weapon.balance, weapon.dexAmp ? attacker.attrs.dex : 0);
-  const rolled = balanceRoll(rng, weapon.damage[0], weapon.damage[1], balance);
-  return rolled + (weapon.strApplies ? attacker.attrs.str : 0);
 }
 
 export class RealtimeCombatEngine {
@@ -226,20 +221,24 @@ export class RealtimeCombatEngine {
   private readonly rangedStrafeStates = new Map<number, { direction: -1 | 1; timer: number; stuckTimer: number; lastPosition: Vec2 }>();
   private readonly threat = new Map<number, Map<number, number>>();
   private readonly targetLocks = new Map<number, { targetId: number; timer: number }>();
+  private sceneModifiers: Modifier[] = [];
+  private bossModifiers: Modifier[] = [];
+  private readonly bossPhaseStates = new Map<number, BossPhaseState>();
 
   constructor(opts: { seed?: number; onEvent?: (event: CombatEvent) => void; setup?: BattleSetup; enemyAttrsOverride?: Attributes } = {}) {
     this.rng = createRng(opts.seed ?? Date.now());
     this.onEvent = opts.onEvent;
     const setup = opts.setup ?? createDefaultBattleSetup();
     const playerLoadout = normalizeLoadout(setup.player.loadout);
-    const playerHands = handsFromLoadout(playerLoadout, setup.player.attrs);
+    const playerAttrs = applyEquipmentAttrModifiers(setup.player.attrs, playerLoadout);
+    const playerHands = handsFromLoadout(playerLoadout, playerAttrs);
     const playerDefense = equipmentDefense(playerLoadout);
     this.player = makeCombatant({
       id: PLAYER_ID,
       kind: 'player',
       faction: 'player',
       name: setup.player.name,
-      attrs: cloneAttrs(setup.player.attrs),
+      attrs: cloneAttrs(playerAttrs),
       radius: 17,
       color: 0x5b8def,
       position: { ...setup.player.position },
@@ -251,11 +250,9 @@ export class RealtimeCombatEngine {
       parryRate: playerDefense.parryRate,
       blockRate: playerDefense.blockRate,
       hands: playerHands,
-      skills: setup.player.actionLoadout.skillSlots.filter((skillId): skillId is SkillId => !!skillId),
+      skills: setup.player.actionLoadout.skillSlots.filter((s): s is string => !!s),
       skillSlots: [...setup.player.actionLoadout.skillSlots],
       skillCooldowns: {},
-      itemSlots: [...setup.player.actionLoadout.itemSlots],
-      itemUsed: setup.player.actionLoadout.itemSlots.map(() => false),
       aiState: 'guard',
       defaultAiState: 'guard',
       alertRange: 0,
@@ -282,7 +279,8 @@ export class RealtimeCombatEngine {
     const skillId = this.player.skillSlots[slotIndex];
     if (!skillId || this.result || this.player.hp <= 0) return;
     const skill = skillById(skillId);
-    const target = skill.targetType === 'self' ? this.player : this.targetFor(this.player);
+    const isSelfTarget = !!skill.heal && !skill.modifiers?.length;
+    const target = isSelfTarget ? this.player : this.targetFor(this.player);
     if (!target) {
       this.pushActionFailEvent(this.player, skill.name, 'noTarget');
       return;
@@ -299,15 +297,10 @@ export class RealtimeCombatEngine {
     const skillId = this.player.skillSlots[slotIndex];
     if (!skillId || this.result || this.player.hp <= 0) return null;
     const skill = skillById(skillId);
-    const target = skill.targetType === 'self' ? this.player : this.targetFor(this.player);
+    const isSelfTarget = !!skill.heal && !skill.modifiers?.length;
+    const target = isSelfTarget ? this.player : this.targetFor(this.player);
     if (!target) return 'noTarget';
     return this.skillFailureReason(this.player, target, skill);
-  }
-
-  usePlayerItemSlot(slotIndex: number): void {
-    const itemId = this.player.itemSlots[slotIndex];
-    if (!itemId || this.result || this.player.hp <= 0 || this.player.itemUsed[slotIndex]) return;
-    this.useItem(this.player, itemId, slotIndex);
   }
 
   step(input: InputState, dt: number): void {
@@ -325,6 +318,7 @@ export class RealtimeCombatEngine {
     if (!this.result) this.tickProjectiles(safeDt);
     else this.projectiles.length = 0;
     if (!this.result) this.tickStatusEffects(safeDt);
+    if (!this.result) this.tickCasting(safeDt);
     if (!this.result) this.removeDeadBodies();
     if (!this.result) this.tickPlayerCombatState(safeDt);
     if (!this.result) this.tickHiddenPassiveRegen(safeDt);
@@ -630,6 +624,7 @@ export class RealtimeCombatEngine {
   }
 
   private performReadyAttacks(attacker: Combatant, targets: Combatant[]): void {
+    if (this.isIncapacitated(attacker)) return;
     const readyHands = attacker.hands.filter((hand) => hand.cooldown === 0);
     for (const hand of readyHands) {
       if (hand.weapon.attackMode === 'projectile') this.shoot(attacker, hand);
@@ -654,7 +649,7 @@ export class RealtimeCombatEngine {
       }
     }
 
-    hand.cooldown = hand.interval;
+    hand.cooldown = this.dynamicInterval(attacker, hand);
     this.strikes.push({
       id: this.nextEffectId++,
       position: { ...attacker.position },
@@ -673,33 +668,31 @@ export class RealtimeCombatEngine {
     const parallelHands = attacker.hands.filter((item) => item.cooldown === 0 && item.weapon.projectile);
     const laneIndex = Math.max(0, parallelHands.findIndex((item) => item === hand));
     const laneOffset = (laneIndex - (parallelHands.length - 1) / 2) * 14;
-    hand.cooldown = hand.interval;
+    hand.cooldown = this.dynamicInterval(attacker, hand);
     attacker.flash = 0.08;
 
-    const projectile = weapon.projectile;
-    const ammo = getDefaultAmmo(projectile.ammoType);
-    const shotCount = projectile.shotsPerAttack;
-    const range = Math.min(weapon.range, ammo.range);
-    for (let i = 0; i < shotCount; i += 1) {
-      const spreadOffset = shotCount === 1 ? 0 : (i - (shotCount - 1) / 2) * projectile.spreadAngle;
-      const angle = attacker.facing + spreadOffset;
-      const shotDir = { x: Math.cos(angle), y: Math.sin(angle) };
-      const sideDir = { x: -Math.sin(attacker.facing), y: Math.cos(attacker.facing) };
-      const position = {
-        x: attacker.position.x + shotDir.x * (attacker.radius + 8) + sideDir.x * laneOffset,
-        y: attacker.position.y + shotDir.y * (attacker.radius + 8) + sideDir.y * laneOffset,
-      };
-      if (this.projectileSpawnBlocked(position, ammo.radius)) continue;
+    const isBow = weapon.tags.includes('bow');
+    const speed = isBow ? 360 : 620;
+    const projRadius = isBow ? 4 : 3;
+    const projRange = weapon.range;
+    const angle = attacker.facing;
+    const shotDir = { x: Math.cos(angle), y: Math.sin(angle) };
+    const sideDir = { x: -Math.sin(attacker.facing), y: Math.cos(attacker.facing) };
+    const position = {
+      x: attacker.position.x + shotDir.x * (attacker.radius + 8) + sideDir.x * laneOffset,
+      y: attacker.position.y + shotDir.y * (attacker.radius + 8) + sideDir.y * laneOffset,
+    };
+    if (!this.projectileSpawnBlocked(position, projRadius)) {
       this.projectiles.push({
         id: this.nextProjectileId++,
         ownerId: attacker.id,
         weaponId: weapon.id,
         hand: hand.side,
         position,
-        velocity: { x: shotDir.x * ammo.speed, y: shotDir.y * ammo.speed },
-        radius: ammo.radius,
-        ttl: range / ammo.speed,
-        distanceLeft: range,
+        velocity: { x: shotDir.x * speed, y: shotDir.y * speed },
+        radius: projRadius,
+        ttl: projRange / speed,
+        distanceLeft: projRange,
       });
     }
   }
@@ -795,49 +788,48 @@ export class RealtimeCombatEngine {
   private skillFailureReason(attacker: Combatant, target: Combatant, skill: SkillDefinition, distanceToTarget = distance(attacker.position, target.position)): SkillFailureReason | null {
     if ((attacker.skillCooldowns[skill.id] ?? 0) > 0) return 'cooldown';
     if (attacker.mp < (skill.mpCost ?? 0)) return 'notEnoughMp';
-    if (skill.targetType === 'self' && attacker.id !== target.id) return 'noTarget';
-    if (skill.targetType === 'enemy' && !this.canAttack(attacker, target)) return 'noTarget';
-    if (distanceToTarget < (skill.minRange ?? 0)) return 'tooClose';
-    if (distanceToTarget > (skill.maxRange ?? Infinity)) return 'tooFar';
+    const isSelfTarget = !!skill.heal && !skill.modifiers?.length;
+    if (isSelfTarget && attacker.id !== target.id) return 'noTarget';
+    if (!isSelfTarget && !this.canAttack(attacker, target)) return 'noTarget';
+    const isMelee = skill.tags.includes('melee');
     const meleeHand = this.meleeHandFor(attacker);
-    if (skill.requiresMeleeRange && (!meleeHand || !targetInMeleeRange(attacker, target, meleeHand))) return 'notInMeleeRange';
-    if (skill.requiresLineOfSight && !this.hasLineOfSight(attacker.position, target.position)) return 'blocked';
+    if (isMelee && (!meleeHand || !targetInMeleeRange(attacker, target, meleeHand))) return 'notInMeleeRange';
+    if (!isSelfTarget && !this.hasLineOfSight(attacker.position, target.position)) return 'blocked';
     return null;
   }
 
   private useSkill(attacker: Combatant, target: Combatant, skill: SkillDefinition): void {
+    if (this.isIncapacitated(attacker)) return;
+    if (this.isSilenced(attacker)) return;
     if (this.skillFailureReason(attacker, target, skill)) return;
-    if (attacker.faction === 'player') this.markPlayerInCombat();
-    attacker.mp = Math.max(0, attacker.mp - (skill.mpCost ?? 0));
-    attacker.skillCooldowns[skill.id] = skill.cooldown;
 
-    let lastDamage = 0;
-    let lastHit = false;
-    for (const effect of skill.effects) {
-      if (effect.kind === 'moveToTarget') {
-        this.moveNearTarget(attacker, target, effect.stopDistanceBonus);
-        continue;
+    const hand = this.meleeHandFor(attacker) ?? attacker.hands[0];
+    const weaponTags = hand?.weapon.tags ?? [];
+    const skillWeaponTags = skill.tags.filter((t) => t === 'melee' || t === 'ranged');
+    if (skillWeaponTags.length > 0 && !isCompatible(skillWeaponTags, weaponTags)) return;
+
+    if (attacker.faction === 'player') this.markPlayerInCombat();
+
+    if (skill.action === 'cast' && !attacker.casting) {
+      const castTime = skill.castTime ?? 0;
+      const staffMult = hand?.weapon.castTimeMult ?? 1;
+      const buffMods = statusEffectsToModifiers(this.statusEffects, attacker.id);
+      const castSpeedMods = buffMods.filter((m) => m.target === 'cast.speed');
+      let speedFactor = 1;
+      for (const mod of castSpeedMods) {
+        speedFactor *= mod.value;
       }
-      if (effect.kind === 'damage') {
-        const hand = this.meleeHandFor(attacker) ?? attacker.hands[0];
-        const hit = this.resolveAttackWithWeapon(attacker, target, hand?.weapon, hand?.side, effect.multiplier, skill.name);
-        lastDamage = hit.damage;
-        lastHit = hit.damage > 0 || hit.brokeDefense;
-        if (lastDamage > 0) {
-          target.flash = 0.22;
-          this.addImpact(target.position);
-          this.addDamageText(target.position, lastDamage);
-        }
-        continue;
-      }
-      if (effect.kind === 'applyStatus') {
-        if (!lastHit) continue;
-        if (this.rng() >= effect.chance) continue;
-        if (effect.amount.kind === 'damageRatio' && lastDamage <= 0) continue;
-        const amountPerTick = effect.amount.kind === 'damageRatio' ? Math.max(1, Math.round(lastDamage * effect.amount.ratio)) : Math.max(1, Math.round(target.maxHp * effect.amount.ratio));
-        if (amountPerTick > 0) this.applyStatus(attacker, target, effect.statusId, skill.rank, amountPerTick, effect.duration);
-      }
+      const effectiveCastTime = castTime * staffMult / Math.max(0.05, speedFactor);
+      attacker.casting = {
+        skillId: skill.id,
+        targetId: target.id,
+        remaining: effectiveCastTime,
+        totalTime: effectiveCastTime,
+      };
+      return;
     }
+
+    this.fireSkill(attacker, target, skill);
   }
 
   private moveNearTarget(attacker: Combatant, target: Combatant, stopDistanceBonus: number): void {
@@ -855,14 +847,15 @@ export class RealtimeCombatEngine {
 
   private applyStatus(source: Combatant, target: Combatant, statusId: StatusEffect['statusId'], rank: Rank, amountPerTick: number, duration: number): void {
     const status = statusById(statusId);
-    const effectiveDuration = status.kind === 'debuff' ? debuffDuration(duration, target.attrs.wil) : duration;
+    const tickInterval = 1;
+    const effectiveDuration = status.direction === 'debuff' ? debuffDuration(duration, target.attrs.wil) : duration;
     const existing = this.statusEffects.find((e) => e.statusId === statusId && e.sourceId === source.id && e.targetId === target.id && e.rank === rank);
     if (existing) {
-      if (status.maxStacks > 0 && existing.stacks < status.maxStacks) {
+      if (status.stackLimit > 0 && existing.stacks < status.stackLimit) {
         existing.stacks += 1;
         existing.amountPerTick = amountPerTick;
         existing.remaining = effectiveDuration;
-        existing.tickTimer = Math.min(existing.tickTimer, status.tickInterval);
+        existing.tickTimer = Math.min(existing.tickTimer, tickInterval);
       } else {
         existing.amountPerTick = amountPerTick;
         existing.remaining = effectiveDuration;
@@ -875,30 +868,20 @@ export class RealtimeCombatEngine {
       statusId,
       rank,
       name: status.name,
-      kind: status.kind,
+      kind: status.direction,
       sourceId: source.id,
       targetId: target.id,
       stacks: 1,
       amountPerTick,
-      effectType: status.effectType,
+      type: status.type,
       remaining: effectiveDuration,
-      tickInterval: status.tickInterval,
-      tickTimer: status.tickInterval,
+      tickInterval,
+      tickTimer: tickInterval,
+      behavior: status.behavior,
     });
     this.pushStatusEvent(source, target, status.name, 'apply');
-  }
-
-  private useItem(target: Combatant, itemId: ItemId, slotIndex: number): void {
-    const item = itemById(itemId);
-    target.itemUsed[slotIndex] = true;
-    for (const effect of item.effects) {
-      if (effect.kind !== 'heal' || effect.resource !== 'hp') continue;
-      const heal = Math.max(1, Math.round(target.maxHp * effect.ratio));
-      const applied = Math.max(0, Math.min(heal, target.maxHp - target.hp));
-      target.hp = Math.min(target.maxHp, target.hp + heal);
-      if (applied > 0) this.addHealingThreat(target, target, applied);
-      this.addDamageText(target.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
-      this.pushResourceEvent(target, target, 'hp', applied, item.name);
+    if (status.type === 'toggle' && status.behavior?.interruptCast) {
+      this.interruptCasting(target);
     }
   }
 
@@ -911,13 +894,13 @@ export class RealtimeCombatEngine {
         this.statusEffects.splice(i, 1);
         continue;
       }
-      if (effect.effectType === 'dot' || effect.effectType === 'hot') {
+      if (effect.type === 'dot' || effect.type === 'hot') {
         effect.tickTimer -= dt;
         while (effect.tickTimer <= 0 && target.hp > 0) {
           effect.tickTimer += effect.tickInterval;
           target.flash = 0.18;
           const tickAmount = effect.amountPerTick * effect.stacks;
-          if (effect.effectType === 'dot') {
+          if (effect.type === 'dot') {
             if (source.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
             target.hp = Math.max(0, target.hp - tickAmount);
             this.addThreat(target, source, tickAmount);
@@ -940,6 +923,107 @@ export class RealtimeCombatEngine {
       if (effect.remaining <= 0 || target.hp <= 0) {
         if (target.hp > 0) this.pushStatusEvent(source, target, effect.name, 'expire');
         this.statusEffects.splice(i, 1);
+      }
+    }
+  }
+
+  private tickCasting(dt: number): void {
+    for (const combatant of this.combatants()) {
+      if (!combatant.casting || combatant.hp <= 0) continue;
+      combatant.casting.remaining -= dt;
+      if (combatant.casting.remaining <= 0) {
+        const target = this.combatantById(combatant.casting.targetId);
+        if (target && target.hp > 0) {
+          const skill = skillById(combatant.casting.skillId);
+          combatant.casting = undefined;
+          this.fireSkill(combatant, target, skill);
+        } else {
+          combatant.casting = undefined;
+        }
+      }
+    }
+  }
+
+  private interruptCasting(combatant: Combatant): void {
+    if (!combatant.casting) return;
+    combatant.casting = undefined;
+  }
+
+  private accumulateToggleBreak(target: Combatant, damage: number): void {
+    for (let i = this.statusEffects.length - 1; i >= 0; i--) {
+      const effect = this.statusEffects[i];
+      if (effect.targetId !== target.id || effect.type !== 'toggle') continue;
+      const bt = effect.behavior?.breakThreshold;
+      if (!bt) continue;
+      const threshold = target.maxHp * bt;
+      effect.breakPool = (effect.breakPool ?? 0) + damage;
+      if (effect.breakPool >= threshold) {
+        const source = this.combatantById(effect.sourceId) ?? target;
+        this.pushStatusEvent(source, target, effect.name, 'expire');
+        this.statusEffects.splice(i, 1);
+      }
+    }
+  }
+
+  private fireSkill(attacker: Combatant, target: Combatant, skill: SkillDefinition): void {
+    attacker.mp = Math.max(0, attacker.mp - (skill.mpCost ?? 0));
+    attacker.skillCooldowns[skill.id] = skill.cooldown;
+
+    let lastDamage = 0;
+    let lastBrokeDefense = false;
+    let lastOutcome: AttackOutcome | undefined;
+
+    if (skill.action !== 'instant' && skill.modifiers && skill.modifiers.length > 0) {
+      const hand = this.meleeHandFor(attacker) ?? attacker.hands[0];
+      const hit = this.resolveAttackWithWeapon(attacker, target, hand?.weapon, hand?.side, 1, skill.name, skill.modifiers, skill.tags, skill.canCrit ?? false);
+      lastDamage = hit.damage;
+      lastBrokeDefense = hit.brokeDefense;
+      lastOutcome = hit.outcome;
+      if (lastDamage > 0) {
+        target.flash = 0.22;
+        this.addImpact(target.position);
+        this.addDamageText(target.position, lastDamage);
+      }
+    }
+
+    if (skill.heal) {
+      const effectiveTarget = (!!skill.heal && !skill.modifiers?.length) ? attacker : target;
+      let healAmount = skill.heal.base;
+      if (skill.heal.scaling) {
+        for (const [attr, coeff] of Object.entries(skill.heal.scaling)) {
+          healAmount += (attacker.attrs[attr as keyof Attributes] ?? 0) * coeff;
+        }
+      }
+      healAmount = Math.max(1, Math.round(healAmount));
+      const applied = Math.min(healAmount, effectiveTarget.maxHp - effectiveTarget.hp);
+      effectiveTarget.hp = Math.min(effectiveTarget.maxHp, effectiveTarget.hp + healAmount);
+      if (applied > 0) this.addHealingThreat(attacker, effectiveTarget, applied);
+      this.addDamageText(effectiveTarget.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
+    }
+
+    if (skill.onHit) {
+      for (const entry of skill.onHit) {
+        if ('heal' in entry) {
+          const healTarget = (!!skill.heal && !skill.modifiers?.length) ? attacker : target;
+          let healAmt = entry.heal.base;
+          if (entry.heal.scaling) {
+            for (const [attr, coeff] of Object.entries(entry.heal.scaling)) {
+              healAmt += (attacker.attrs[attr as keyof Attributes] ?? 0) * coeff;
+            }
+          }
+          healAmt = Math.max(1, Math.round(healAmt));
+          const applied = Math.min(healAmt, healTarget.maxHp - healTarget.hp);
+          healTarget.hp = Math.min(healTarget.maxHp, healTarget.hp + healAmt);
+          if (applied > 0) this.addHealingThreat(attacker, healTarget, applied);
+          this.addDamageText(healTarget.position, applied, { color: 0x6fbf73, yOffset: -48, prefix: '+' });
+          continue;
+        }
+        if (lastOutcome === '閃避' || lastOutcome === '躲避') continue;
+        if (skill.modifiers && skill.modifiers.length > 0) {
+          if (!lastBrokeDefense && !skill.effectsIgnoreBreak) continue;
+        }
+        const amountPerTick = entry.amount ?? 0;
+        this.applyStatus(attacker, target, entry.effect, (entry.rank ?? skill.rank) as Rank, amountPerTick, entry.duration);
       }
     }
   }
@@ -1063,29 +1147,47 @@ export class RealtimeCombatEngine {
     }
   }
 
-  private resolveBasicAttackWithWeapon(attacker: Combatant, target: Combatant, weapon?: WeaponDefinition, hand?: CombatHandSide): { damage: number; brokeDefense: boolean } {
+  private resolveBasicAttackWithWeapon(attacker: Combatant, target: Combatant, weapon?: WeaponDefinition, hand?: CombatHandSide): { damage: number; brokeDefense: boolean; outcome: AttackOutcome } {
     return this.resolveAttackWithWeapon(attacker, target, weapon, hand, 1, '普攻');
   }
 
-  private resolveAttackWithWeapon(attacker: Combatant, target: Combatant, weapon: WeaponDefinition | undefined, hand: CombatHandSide | undefined, damageMultiplier: number, actionName: string): { damage: number; brokeDefense: boolean } {
+  private resolveAttackWithWeapon(attacker: Combatant, target: Combatant, weapon: WeaponDefinition | undefined, hand: CombatHandSide | undefined, damageMultiplier: number, actionName: string, skillModifierDefs?: Array<{ target: string; op?: string; value: number }>, skillTags?: string[], canCrit = true): { damage: number; brokeDefense: boolean; outcome: AttackOutcome } {
     if (attacker.faction === 'player' || target.faction === 'player') this.markPlayerInCombat();
+    const weaponTags = weapon?.tags ?? ['melee', 'physical'];
+    const effectiveSkillTags = skillTags ?? ['attack', ...weaponTags.filter((t) => t !== 'weapon')];
     const table = buildAttackTable({
       attacker: attacker.attrs,
       defender: target.attrs,
       defenderParryRate: target.parryRate,
       defenderBlockRate: target.blockRate,
-      attackerCanCrit: weapon?.kind !== '槍',
-      attackerCrushRate: 0,
-      canBeParried: weapon?.attackMode !== 'projectile',
-      canBeBlocked: true,
+      skillTags: effectiveSkillTags,
+      attackerTags: [],
+      skillCanCrit: canCrit && weaponAttrRules(weaponTags).canCrit,
+      defenderIncapacitated: this.isIncapacitated(target),
     });
     const outcome = rollOutcome(table, this.rng);
-    const base = baseDamageWithWeapon(attacker, this.rng, weapon);
-    const result = resolveDamage(outcome, base, { armor: target.armor, reductionRate: target.reductionRate }, damageMultiplier);
-    const { damage, brokeDefense } = result;
+    const weaponMods = weaponToModifiers(weapon, attacker.attrs, this.rng);
+    const skillMods = skillToModifiers(skillModifierDefs);
+    if (damageMultiplier !== 1) {
+      skillMods.push({ source: 'skill:legacy', target: 'damage.mult', op: '×', value: damageMultiplier });
+    }
+    const buffMods = statusEffectsToModifiers(this.statusEffects, target.id);
+    const attackerFaction = attacker.faction === 'player' ? 'player' : 'enemy';
+    const filteredSceneMods = this.sceneModifiers.filter((m) => !m.appliesTo || m.appliesTo === 'all' || m.appliesTo === attackerFaction);
+    const filteredBossMods = this.bossModifiers.filter((m) => !m.appliesTo || m.appliesTo === 'all' || m.appliesTo === attackerFaction);
+    const { damage, brokeDefense, outcome: resolvedOutcome } = calculateDamage({
+      modifierSources: [weaponMods, skillMods, buffMods, filteredSceneMods, filteredBossMods],
+      skillTags: effectiveSkillTags,
+      outcome,
+      baseArmor: target.armor,
+      baseReductionRate: target.reductionRate,
+    });
 
     if (damage > 0) {
       target.hp = Math.max(0, target.hp - damage);
+      this.interruptCasting(target);
+      this.accumulateToggleBreak(target, damage);
+      this.checkBossPhaseTransition(target);
       this.addThreat(target, attacker, damage);
       if (target.hp > 0 && target.faction !== 'player') {
         if (target.faction === 'neutral') target.retaliationTargetId = attacker.id;
@@ -1096,7 +1198,7 @@ export class RealtimeCombatEngine {
     } else {
       this.pushMissEvent(attacker, target, outcome, hand, actionName);
     }
-    return { damage, brokeDefense };
+    return { damage, brokeDefense, outcome: resolvedOutcome };
   }
 
   private definitionFor(enemy: Combatant): EnemyDefinition {
@@ -1106,6 +1208,67 @@ export class RealtimeCombatEngine {
 
   private weaponById(attacker: Combatant, weaponId: string): WeaponDefinition | undefined {
     return attacker.hands.find((hand) => hand.weapon.id === weaponId)?.weapon;
+  }
+
+  setSceneModifiers(modifiers: Modifier[]): void {
+    this.sceneModifiers = modifiers;
+  }
+
+  setBossModifiers(modifiers: Modifier[]): void {
+    this.bossModifiers = modifiers;
+  }
+
+  setBossPhases(combatantId: number, phases: BossPhaseDef[]): void {
+    if (phases.length === 0) return;
+    const state = createBossPhaseState(phases);
+    this.bossPhaseStates.set(combatantId, state);
+    const combatant = this.combatantById(combatantId);
+    if (combatant) this.checkBossPhaseTransition(combatant);
+  }
+
+  private checkBossPhaseTransition(combatant: Combatant): void {
+    const state = this.bossPhaseStates.get(combatant.id);
+    if (!state) return;
+    const hpRatio = combatant.hp / combatant.maxHp;
+    const transition = checkPhaseTransition(state, hpRatio, String(combatant.id));
+    if (!transition) return;
+
+    applyPhaseTransition(state, transition);
+    this.bossModifiers = state.activeModifiers;
+
+    if (transition.newSkills) {
+      combatant.skills = transition.newSkills;
+      combatant.skillSlots = transition.newSkills;
+      combatant.skillCooldowns = {};
+    }
+
+    if (transition.onEnterEffects) {
+      for (const eff of transition.onEnterEffects) {
+        this.applyStatus(combatant, combatant, eff.effect, eff.rank as Rank, eff.amount, eff.duration);
+      }
+    }
+  }
+
+  private isIncapacitated(combatant: Combatant): boolean {
+    return this.statusEffects.some(
+      (e) => e.targetId === combatant.id && e.behavior?.disableActions === true,
+    );
+  }
+
+  private isSilenced(combatant: Combatant): boolean {
+    return this.statusEffects.some(
+      (e) => e.targetId === combatant.id && e.behavior?.disableSkills === true,
+    );
+  }
+
+  private dynamicInterval(combatant: Combatant, hand: CombatHand): number {
+    const buffMods = statusEffectsToModifiers(this.statusEffects, combatant.id);
+    const speedMods = buffMods.filter((m) => m.target === 'defense.attackSpeed');
+    let speedFactor = 1;
+    for (const mod of speedMods) {
+      speedFactor *= mod.value;
+    }
+    return hand.interval / Math.max(0.05, speedFactor);
   }
 
   private hasReadyHand(combatant: Combatant): boolean {

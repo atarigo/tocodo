@@ -1,12 +1,11 @@
 import type { ActionLoadout, ArenaObstacle, Attributes, BattleSetup, Rank, EquipmentLoadout } from './types.js';
-import { createEncounterSpawns } from '../data/encounterCatalog.js';
+import { createSceneSpawns, getSceneIds } from '../data/scenesLoader.js';
 import { DEFAULT_LOADOUT } from '../data/equipmentCatalog.js';
-import { createRng } from './rng.js';
+import { createRng, pick } from './rng.js';
 
 const DEFAULT_PLAYER_ATTRS: Attributes = { str: 10, vit: 10, agi: 10, dex: 10, wil: 10, luk: 10 };
 export const DEFAULT_ACTION_LOADOUT: ActionLoadout = {
-  skillSlots: ['heal', null, null, null, null],
-  itemSlots: ['smallHealthPotion', null],
+  skillSlots: [null, null, null, null, null],
 };
 
 export function createDefaultBattleSetup(
@@ -23,26 +22,23 @@ export function createDefaultBattleSetup(
       position: { x: 400, y: 310 },
       facing: -Math.PI / 2,
     },
-    enemies: [
-      { enemyId: 'redScout', position: { x: 190, y: 180 }, facing: 0 },
-      { enemyId: 'orangeGuard', position: { x: 610, y: 430 }, facing: Math.PI },
-      { enemyId: 'purpleShooter', position: { x: 640, y: 150 }, facing: Math.PI },
-    ],
+    enemies: [],
     obstacles: [],
   };
 }
 
-export function createRandomBattleSetup(params: {
+export function createSceneBattleSetup(params: {
   playerAttrs: Attributes;
   loadout: EquipmentLoadout;
   actionLoadout: ActionLoadout;
+  sceneId: string;
   difficulty: Rank;
   seed: number;
 }): BattleSetup {
-  const encounter = createEncounterSpawns(params.difficulty, params.seed);
+  const scene = createSceneSpawns(params.sceneId, params.difficulty, params.seed);
   return {
     difficulty: params.difficulty,
-    encounterName: encounter.name,
+    encounterName: scene.name,
     player: {
       name: '玩家',
       attrs: { ...params.playerAttrs },
@@ -51,17 +47,28 @@ export function createRandomBattleSetup(params: {
       position: { x: 400, y: 310 },
       facing: -Math.PI / 2,
     },
-    enemies: encounter.enemies,
-    allies: encounter.allies,
-    neutrals: encounter.neutrals,
+    enemies: scene.enemies,
+    allies: scene.allies,
+    neutrals: scene.neutrals,
     obstacles: createRandomObstacles(params.seed + 101),
   };
+}
+
+export function createRandomSceneBattleSetup(params: {
+  playerAttrs: Attributes;
+  loadout: EquipmentLoadout;
+  actionLoadout: ActionLoadout;
+  difficulty: Rank;
+  seed: number;
+}): BattleSetup {
+  const rng = createRng(params.seed);
+  const sceneId = pick(rng, getSceneIds());
+  return createSceneBattleSetup({ ...params, sceneId });
 }
 
 function cloneActionLoadout(loadout: ActionLoadout): ActionLoadout {
   return {
     skillSlots: [...loadout.skillSlots],
-    itemSlots: [...loadout.itemSlots],
   };
 }
 

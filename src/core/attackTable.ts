@@ -45,14 +45,14 @@ export interface AttackTableContext {
   defenderParryRate: number;
   /** 格檔率：只有盾牌提供（約 30%〜45%），0 ＝ 沒有盾；可被法術 buff/debuff 增減 */
   defenderBlockRate: number;
-  /** 攻方可否暴擊（槍不可——槍手的幸運只剩躲避） */
-  attackerCanCrit?: boolean;
+  /** 技能或攻擊的 tag（決定閃避/招架/暴擊是否啟用） */
+  skillTags: string[];
+  /** 攻擊者的 tag（含 boss_source 則啟用碾壓） */
+  attackerTags: string[];
+  /** 技能宣告的 canCrit（預設依武器 tag 決定） */
+  skillCanCrit: boolean;
   /** 碾壓率：頭目普攻限定，預設 15%、各頭目可自訂；技能與一般敵人為 0 */
   attackerCrushRate?: number;
-  /** 此次攻擊可否被招架（近戰可；射擊、法術撥不開）——由攻擊宣告 */
-  canBeParried?: boolean;
-  /** 此次攻擊可否被格檔（盾牌連火球都擋得住）——由攻擊宣告 */
-  canBeBlocked?: boolean;
   /** 守方行動不能（冰凍／暈眩）：不能閃避、招架、格檔；躲避（幸運）仍在 */
   defenderIncapacitated?: boolean;
 }
@@ -106,34 +106,36 @@ export function critWidth(luk: number): number {
 
 export function buildAttackTable(ctx: AttackTableContext): TableSegment[] {
   const incapacitated = ctx.defenderIncapacitated ?? false;
-  // 依優先序填入；空間不夠時後面的段被擠掉，普通命中拿剩餘空間
+  const tags = ctx.skillTags;
+  const isSpell = tags.includes('spell');
+  const isMelee = tags.includes('melee');
+  const isGun = tags.includes('gun');
+  const isBoss = ctx.attackerTags.includes('boss_source');
+
   const queued: TableSegment[] = [
     {
       outcome: '閃避',
-      width: incapacitated ? 0 : dodgeWidth(ctx.defender.agi, ctx.attacker.dex),
+      width: !isSpell && !incapacitated ? dodgeWidth(ctx.defender.agi, ctx.attacker.dex) : 0,
     },
     {
       outcome: '躲避',
-      width: evadeWidth(ctx.defender.luk),
+      width: !isSpell ? evadeWidth(ctx.defender.luk) : 0,
     },
     {
       outcome: '招架',
-      width:
-        !incapacitated && (ctx.canBeParried ?? true) ? Math.max(0, ctx.defenderParryRate) : 0,
+      width: isMelee && !incapacitated ? Math.max(0, ctx.defenderParryRate) : 0,
     },
     {
       outcome: '格檔',
-      width:
-        !incapacitated && (ctx.canBeBlocked ?? true) ? Math.max(0, ctx.defenderBlockRate) : 0,
+      width: !incapacitated ? Math.max(0, ctx.defenderBlockRate) : 0,
     },
-    // 攻方特殊結果：防禦段堆高時，普通命中先歸零 → 碾壓被擠出 → 最後才是暴擊
     {
       outcome: '暴擊',
-      width: (ctx.attackerCanCrit ?? true) ? critWidth(ctx.attacker.luk) : 0,
+      width: ctx.skillCanCrit && !isGun ? critWidth(ctx.attacker.luk) : 0,
     },
     {
       outcome: '碾壓',
-      width: Math.max(0, ctx.attackerCrushRate ?? 0),
+      width: isBoss ? Math.max(0, ctx.attackerCrushRate ?? BOSS_CRUSH_RATE) : 0,
     },
   ];
 
@@ -157,49 +159,3 @@ export function rollOutcome(table: TableSegment[], rng: Rng): AttackOutcome {
   return table[table.length - 1]?.outcome ?? '命中';
 }
 
-// ─ 第二階段：傷害計算（已定案 2026-06-12）─
-// 1. 基礎傷害（平衡擲骰＋力量）
-// 2. 攻方增傷先乘：暴擊 ×1.5／碾壓 ×2／技能倍率與增傷效果 → 得到「來襲傷害」
-//    （增傷先乘的理由：暴擊要能幫助破防，混進減傷率會讓暴擊流對高甲目標報廢）
-// 3. 破防判定：來襲傷害 > 護甲值總和？未破防 → 傷害 1（暫定）、該次攻擊特效不發動（例外由技能宣告）
-// 4. 減算（− 護甲值總和）→ 5. 減成（× 1 − 減傷率）→ 6. 招架/格檔折減
-// 真傷不走這裡：第一階段有過就打技能宣告的固定值，不計增傷、不計任何防禦與折減。
-//
-// 數值修飾統一規則：裝備詞綴先改裝備自己的值（組裝時烤死）；
-// 實際值 ＝（基準值 ＋ 固定值效果加總）×（1 ＋ 比例效果加總），最低 0。
-// buff、debuff、攻擊當下特效三種來源一起加總（攻擊特效不是 debuff，可與 debuff 疊加）。
-
-export interface DefenseValues {
-  /** 護甲值總和（減算）：裝備詞綴已烤入、效果加總後的最終值，最低 0 */
-  armor: number;
-  /** 減傷率（減成）：0〜1，效果加總後的最終值，最低 0 */
-  reductionRate: number;
-}
-
-export interface DamageResult {
-  damage: number;
-  /** 破防＝來襲傷害 > 護甲值總和；未破防時該次攻擊的特效不發動 */
-  brokeDefense: boolean;
-}
-
-export function resolveDamage(
-  outcome: AttackOutcome,
-  base: number,
-  defense: DefenseValues,
-  /** 攻方增傷效果（技能倍率、增傷 buff 比例加總後），1 ＝ 無增傷 */
-  damageBonus = 1,
-  /** 穿透：無視護甲值總和（必定破防），仍吃減傷率與折減 */
-  pierce = false,
-): DamageResult {
-  if (outcome === '閃避' || outcome === '躲避') return { damage: 0, brokeDefense: false };
-  let incoming = base * damageBonus;
-  if (outcome === '暴擊') incoming *= CRIT_MULTIPLIER;
-  if (outcome === '碾壓') incoming *= CRUSH_MULTIPLIER;
-  const armor = pierce ? 0 : defense.armor;
-  if (incoming <= armor / 3) return { damage: 0, brokeDefense: false };
-  if (incoming <= armor) return { damage: 1, brokeDefense: false };
-  let damage = (incoming - armor) * (1 - defense.reductionRate);
-  if (outcome === '招架') damage *= 1 - PARRY_DAMAGE_REDUCTION;
-  if (outcome === '格檔') damage *= 1 - BLOCK_DAMAGE_REDUCTION;
-  return { damage: Math.max(1, Math.round(damage)), brokeDefense: true };
-}
