@@ -232,8 +232,6 @@
         const slot = Number(event.code.replace('Digit', '')) - 1;
         if (slot >= 0 && slot < 5) localEngine.usePlayerSkillSlot(slot);
       }
-      if (event.code === 'KeyQ') localEngine.usePlayerItemSlot(0);
-      if (event.code === 'KeyE') localEngine.usePlayerItemSlot(1);
       keys.add(event.code);
     };
     const onKeyUp = (event: KeyboardEvent) => {
@@ -306,7 +304,6 @@
         onPlayerActionState?.({
           skillCooldowns: localEngine.player.skillSlots.map((skillId) => (skillId ? (localEngine.player.skillCooldowns[skillId] ?? 0) : 0)),
           skillFailureReasons: localEngine.player.skillSlots.map((_, index) => localEngine.playerSkillFailureReason(index)),
-          itemUsed: [...localEngine.player.itemUsed],
         });
         onSnapshot?.({
           elapsed,

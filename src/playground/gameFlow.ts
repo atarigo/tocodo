@@ -128,7 +128,6 @@ export function createDungeonStageSetup(params: {
       loadout: { ...params.loadout },
       actionLoadout: {
         skillSlots: [...(params.actionLoadout ?? DEFAULT_ACTION_LOADOUT).skillSlots],
-        itemSlots: [...(params.actionLoadout ?? DEFAULT_ACTION_LOADOUT).itemSlots],
       },
       position: { x: 220, y: 310 },
       facing: 0,

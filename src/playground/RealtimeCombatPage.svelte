@@ -32,7 +32,7 @@
     type NoviceDifficulty,
     type NoviceRewardChoice,
   } from './gameFlow.js';
-  import { itemById } from '../data/itemCatalog.js';
+  // items removed — not in spec
   import { skillById } from '../data/skillCatalog.js';
 
   let events = $state<CombatEvent[]>([]);
@@ -41,14 +41,12 @@
   let playerLoadout = $state<EquipmentLoadout>({ ...DEFAULT_LOADOUT });
   let actionLoadout = $state<ActionLoadout>({
     skillSlots: [...DEFAULT_ACTION_LOADOUT.skillSlots],
-    itemSlots: [...DEFAULT_ACTION_LOADOUT.itemSlots],
   });
   let battleSetup = $state<BattleSetup | null>(null);
   let playerStatuses = $state<StatusEffect[]>([]);
   let playerActionState = $state<ActionBarState>({
     skillCooldowns: [0, 0, 0, 0, 0],
     skillFailureReasons: [null, null, null, null, null],
-    itemUsed: [false, false],
   });
   let scene = $state<GameScene>('landing');
   let selectedDifficulty = $state<NoviceDifficulty>(1);
@@ -84,7 +82,6 @@
     playerActionState = {
       skillCooldowns: [0, 0, 0, 0, 0],
       skillFailureReasons: [null, null, null, null, null],
-      itemUsed: [false, false],
     };
     currentStageKills = 0;
     currentStageElapsed = 0;
@@ -285,9 +282,6 @@
     return playerActionState.skillFailureReasons[slotIndex] ?? null;
   }
 
-  function itemWasUsed(slotIndex: number): boolean {
-    return playerActionState.itemUsed[slotIndex] ?? false;
-  }
 </script>
 
 <header class="topbar">
@@ -476,16 +470,7 @@
             </div>
           {/each}
         </div>
-        <div class="quickbar-row items">
-          {#each Array(2) as _, index}
-            <div class="quick-slot item-slot" class:used={itemWasUsed(index)}>
-              {#if actionLoadout.itemSlots[index] && !itemWasUsed(index)}
-                <strong>{itemById(actionLoadout.itemSlots[index]).name}</strong>
-              {/if}
-              <span>{index === 0 ? 'Q' : 'E'}</span>
-            </div>
-          {/each}
-        </div>
+        <!-- items removed — not in spec -->
       </div>
     {/if}
   </section>

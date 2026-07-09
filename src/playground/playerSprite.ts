@@ -133,10 +133,14 @@ export function drawPlayerSprite(layer: Container, options: PlayerSpriteOptions)
 
 export function handLoadout(hands: CombatHand[]): EquipmentLoadout {
   const loadout: EquipmentLoadout = {
-    mainHand: hands.find((hand) => hand.side === 'main')?.weapon.id ?? 'iron-sword',
-    offHand: hands.find((hand) => hand.side === 'off')?.weapon.id ?? null,
     head: null,
+    neck: null,
     body: null,
+    mainHand: hands.find((hand) => hand.side === 'main')?.weapon.id ?? null,
+    offHand: hands.find((hand) => hand.side === 'off')?.weapon.id ?? null,
+    ring1: null,
+    ring2: null,
+    waist: null,
     legs: null,
     feet: null,
   };

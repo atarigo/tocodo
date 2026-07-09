@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { ATTR_KEYS, ATTR_NAMES, RANKS, RANK_LABELS, type ActionLoadout, type Attributes, type BattleSetup, type Rank, type EnemySpawn, type EquipmentDefinition, type EquipmentLoadout, type EquipmentSlot, type ItemId, type SkillId, type WeaponDefinition } from '../core/types.js';
+  import { ATTR_KEYS, ATTR_NAMES, RANKS, RANK_LABELS, type ActionLoadout, type Attributes, type BattleSetup, type Rank, type EnemySpawn, type EquipmentDefinition, type EquipmentLoadout, type EquipmentSlot, type SkillId, type WeaponDefinition } from '../core/types.js';
   import { attackInterval, maxHp, maxMp } from '../core/formulas.js';
+  import { weaponAttrRules } from '../core/tags.js';
   import {
     EQUIPMENT_SLOT_LABELS,
     equipmentDefense,
@@ -10,7 +11,7 @@
     getWeapon,
     normalizeLoadout,
   } from '../data/equipmentCatalog.js';
-  import { ITEMS, itemById } from '../data/itemCatalog.js';
+  // items removed — not in spec
   import { SKILLS, skillById } from '../data/skillCatalog.js';
 
   let {
@@ -55,21 +56,17 @@
     actionLoadout = { ...actionLoadout, skillSlots };
   }
 
-  function updateItemSlot(index: number, id: string): void {
-    const itemSlots = [...actionLoadout.itemSlots];
-    itemSlots[index] = id === '' ? null : (id as ItemId);
-    actionLoadout = { ...actionLoadout, itemSlots };
-  }
 
   function isWeapon(item: EquipmentDefinition | null): item is WeaponDefinition {
     return !!item && 'damage' in item;
   }
 
   function effectText(weapon: WeaponDefinition): string {
+    const rules = weaponAttrRules(weapon.tags);
     const effects = [
-      weapon.strApplies ? '力量' : null,
-      weapon.agiApplies ? '敏捷攻速' : null,
-      weapon.dexAmp ? '靈巧平衡' : null,
+      rules.strApplies ? '力量' : null,
+      rules.agiApplies ? '敏捷攻速' : null,
+      rules.dexAmp ? '靈巧平衡' : null,
     ].filter(Boolean);
     return effects.length > 0 ? effects.join(' / ') : '不吃屬性';
   }
@@ -81,7 +78,7 @@
   }
 
   function actualInterval(weapon: WeaponDefinition): string {
-    return `${attackInterval(weapon.interval, playerAttrs.agi, weapon.agiApplies).toFixed(2)}s`;
+    return `${attackInterval(weapon.interval, playerAttrs.agi, weaponAttrRules(weapon.tags).agiApplies).toFixed(2)}s`;
   }
 
   function attrLine(attrs: Attributes): string {
@@ -300,7 +297,7 @@
           <span>{index + 1}</span>
           <select value={actionLoadout.skillSlots[index] ?? ''} onchange={(event) => updateSkillSlot(index, event.currentTarget.value)}>
             <option value="">空</option>
-            {#each Object.values(SKILLS).filter((skill) => skill.id === 'heal') as skill (skill.id)}
+            {#each Object.values(SKILLS).filter((skill) => skill.id === 'heal-hot') as skill (skill.id)}
               <option value={skill.id}>{skill.name}</option>
             {/each}
           </select>
@@ -308,28 +305,13 @@
       {/each}
     </section>
 
-    <section class="panel-section">
-      <h2>道具欄</h2>
-      {#each Array(2) as _, index}
-        <label class="equip-row">
-          <span>{index === 0 ? 'Q' : 'E'}</span>
-          <select value={actionLoadout.itemSlots[index] ?? ''} onchange={(event) => updateItemSlot(index, event.currentTarget.value)}>
-            <option value="">空</option>
-            {#each Object.values(ITEMS) as item (item.id)}
-              <option value={item.id}>{item.name}</option>
-            {/each}
-          </select>
-        </label>
-      {/each}
-    </section>
+    <!-- items removed — not in spec -->
 
     <section class="panel-section">
       <h2>效果摘要</h2>
       <div class="summary-list">
-        <div><span>{skillById('heal').name}</span><strong>每秒 2% HP / 16s</strong></div>
+        <div><span>{skillById('heal-hot').name}</span><strong>每秒 2% HP / 16s</strong></div>
         <div><span>消耗</span><strong>MP 2 / CD 20s</strong></div>
-        <div><span>{itemById('smallHealthPotion').name}</span><strong>恢復 25% HP</strong></div>
-        <div><span>使用</span><strong>一次戰鬥一次</strong></div>
       </div>
     </section>
   </div>
